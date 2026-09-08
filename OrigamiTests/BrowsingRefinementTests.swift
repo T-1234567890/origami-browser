@@ -1,14 +1,25 @@
 import Testing
 import Foundation
+import Security
 import WebKit
 @testable import Origami
 
 @MainActor struct BrowsingRefinementTests {
     @Test func printingIsAllowedByTheSandbox() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("Configuration/Origami.entitlements"))
-        let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
-        #expect(plist?["com.apple.security.print"] as? Bool == true)
+        // These tests are hosted by Origami.app. Inspect its actual signature rather
+        // than the compile-time checkout, which need not exist on Cloud test VMs.
+        var runningCode: SecCode?
+        try #require(SecCodeCopySelf([], &runningCode) == errSecSuccess)
+        let host = try #require(runningCode)
+        var staticCode: SecStaticCode?
+        try #require(SecCodeCopyStaticCode(host, [], &staticCode) == errSecSuccess)
+        let signedHost = try #require(staticCode)
+        var information: CFDictionary?
+        try #require(SecCodeCopySigningInformation(signedHost, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess)
+        let signingInfo = try #require(information as? [String: Any])
+        let entitlements = try #require(signingInfo[kSecCodeInfoEntitlementsDict as String] as? [String: Any])
+        #expect(entitlements["com.apple.security.app-sandbox"] as? Bool == true)
+        #expect(entitlements["com.apple.security.print"] as? Bool == true)
     }
     @Test(.timeLimit(.minutes(1))) func hoverBridgeIsIsolatedAndClosingPreservesUnderlyingTab() async throws {
         let store = BrowserStore()
