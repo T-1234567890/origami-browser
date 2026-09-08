@@ -1,0 +1,65 @@
+# macOS / editor-local metadata
+.DS_Store
+._*
+*~
+*.swp
+*.swo
+/.idea/
+/.vscode/
+
+# Xcode build products and per-user state (keep shared schemes/workspaces)
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xcresult/
+*.xcarchive/
+
+# SwiftPM local products/cache; keep shared Package.resolved
+.build/
+.swiftpm/
+
+# Local credentials/configuration; explicit templates may be shared
+.env
+.env.*
+!.env.example
+!.env.template
+/Configuration/Local*.xcconfig
+*.p12
+*.pfx
+*.p8
+*.key
+*.pem
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.keychain
+*.keychain-db
+id_rsa
+id_ed25519
+
+# Generated runtime databases, including SQLite journals
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+/browser.db
+/browser.db-wal
+/browser.db-shm
+
+# Explicit local runtime/debug export locations (not bundled Resources)
+/session.json
+/RuntimeData/
+/DebugExports/
+/ProviderDumps/
+/TestResults/
+*.log
+*.crash
+*.ips
+
+# Local AI-agent notes, implementation reports, and temporary documentation
+/LocalNotes/
