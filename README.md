@@ -85,3 +85,5 @@ If you redistribute a modified or self-built version:
 - Clearly identify the build as unofficial and not distributed or endorsed by the Origami project.
 - Use your own app name, icon, logo, and other branding.
 - Do not present the build in a way that could reasonably be confused with an official Origami release.
+
+Maintainers: see [Releasing Origami](docs/releasing.md) for update channels, Xcode Cloud, and release configuration.

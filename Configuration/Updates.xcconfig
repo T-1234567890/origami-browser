@@ -1,0 +1,10 @@
+// Safe local defaults. Public configuration only; never put a private key here.
+ORIGAMI_MARKETING_VERSION = 1.0.0
+ORIGAMI_BUILD_NUMBER = 1
+ORIGAMI_RELEASE_TAG =
+ORIGAMI_RELEASE_STAGE = development
+ORIGAMI_PRERELEASE_NUMBER =
+ORIGAMI_FEED_URL =
+ORIGAMI_PUBLIC_ED_KEY = owJi4/Wlx+Pswrme3fv9UkDT9iLXLRTGtD9Alwecla8=
+#include? "LocalUpdates.xcconfig"
+#include? "Release.generated.xcconfig"

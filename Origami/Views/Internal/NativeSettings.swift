@@ -74,6 +74,8 @@ struct NativeSettings: View {
                                 actionRow("Profiles", action: "Manage…") { model.open(InternalPage.profiles.url.absoluteString) }
                             }
                         }
+                        UpdatesSettings()
+                        AboutSettings()
                     case .tabs:
                         Section {
                             Picker("Tab layout", selection: setting($layout, key: "layout", encode: { $0.rawValue })) {

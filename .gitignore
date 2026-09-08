@@ -63,3 +63,8 @@ id_ed25519
 
 # Local AI-agent notes, implementation reports, and temporary documentation
 /LocalNotes/
+
+# Release build metadata and local Python tooling
+/Configuration/Release.generated.xcconfig
+__pycache__/
+/scripts/release/.venv/

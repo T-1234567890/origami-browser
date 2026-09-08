@@ -20,7 +20,7 @@ struct OrigamiApp: App {
         .restorationBehavior(.disabled)
         .defaultSize(width: 1200, height: 800)
         .windowToolbarStyle(.unifiedCompact)
-        .commands { BrowserCommands(application: application) }
+        .commands { BrowserCommands(application: application); UpdateCommands() }
     }
 }
 

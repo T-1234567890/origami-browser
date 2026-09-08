@@ -1,0 +1,36 @@
+name: Recover Published Appcast
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Already-published release whose appcast publication failed
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  recover:
+    concurrency:
+      group: origami-release-publication
+      cancel-in-progress: false
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/release/release.py --validate
+      - name: Verify published binary and repair feed
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          SPARKLE_FEED_URL: ${{ vars.SPARKLE_FEED_URL }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          BUNDLE_IDENTIFIER: ${{ vars.BUNDLE_IDENTIFIER }}
+        run: python3 scripts/release/recover_feed.py
