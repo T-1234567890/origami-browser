@@ -2,6 +2,7 @@
 """Orchestrate one release. Requires explicit credentials; never signs Apple code."""
 import base64
 import hashlib
+import html
 import json
 import os
 from pathlib import Path
@@ -68,10 +69,43 @@ def upload(github, release, path):
         raise ReleaseError('GitHub Release asset upload failed; appcast was not changed') from None
 
 
+def write_summary(release, stage, error=None, commit=''):
+    location = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not location:
+        return
+    title = release['displayVersion'] if release else 'Origami release'
+    lines = ['# ' + title, '']
+    if error:
+        lines += ['✗ Xcode Cloud build could not be started' if stage == 'App Store Connect API' else '✗ Release did not complete', '', 'Stage: ' + stage]
+        if getattr(error, 'status', None):
+            lines.append(f'HTTP: {error.status}')
+        lines += ['', '<pre>' + html.escape(str(error)) + '</pre>']
+    else:
+        beta = release['stage'] == 'beta'
+        lines += ['✓ Xcode Cloud completed', '✓ Tests passed', '✓ Developer ID signature verified',
+                  '✓ Apple notarization verified', '✓ Sparkle update signed',
+                  '✓ GitHub prerelease published' if beta else '✓ GitHub release published', '✓ Appcast updated', '',
+                  'Version: ' + title.removeprefix('Origami '), f'Build: {release["buildNumber"]}',
+                  'Commit: ' + commit[:12], 'Channel: ' + ('Beta' if beta else 'Stable'), 'Minimum macOS: 15.4']
+    with open(location, 'a') as output:
+        output.write('  \n'.join(lines) + '\n')
+
+
 def main():
+    state = dict(release=None, stage='Configuration')
+    try:
+        execute(state)
+    except Exception as error:
+        diagnostic = error if isinstance(error, ReleaseError) else ReleaseError('Unexpected provider, artifact or configuration response')
+        write_summary(state['release'], state['stage'], diagnostic)
+        raise
+
+
+def execute(state):
     tag = required('RELEASE_TAG')
     # Validation happens before credentials, network calls or expensive builds.
     release = metadata(tag, 1)
+    state['release'] = release
     if '--validate' in sys.argv:
         print(json.dumps(release)); return
     repo = required('GITHUB_REPOSITORY')
@@ -95,8 +129,11 @@ def main():
     if existing:
         raise ReleaseError('A release already exists for this tag. Use the documented feed-recovery procedure or remove only the failed draft.')
     commit = command(['git', 'rev-parse', tag + '^{commit}']).decode().strip()
-    run, artifact = run_cloud(API('https://api.appstoreconnect.apple.com', token), workflow, tag, commit)
+    state['stage'] = 'App Store Connect API'
+    run, artifact = run_cloud(API('https://api.appstoreconnect.apple.com', token), workflow, tag, commit,
+                              on_started=lambda: state.update(stage='Xcode Cloud build / artifact discovery'))
     release = metadata(tag, run['attributes']['number'])
+    state.update(release=release, stage='Artifact download / verification / Sparkle packaging')
     ensure_order(old, release)
     with tempfile.TemporaryDirectory(prefix='origami-release-') as temporary:
         work = Path(temporary)
@@ -111,13 +148,16 @@ def main():
         recovery = work / 'appcast.xml'; recovery.write_bytes(data)
         provenance = work / 'release.json'
         provenance.write_text(json.dumps(dict(release=release, commit=commit, cloudBuild=run['id']), indent=2) + '\n')
+        state['stage'] = 'GitHub release publication'
         draft = github.request(f'/repos/{repo}/releases', 'POST', dict(tag_name=tag, target_commitish=commit,
                  name=release['displayVersion'], draft=True, prerelease=release['stage'] == 'beta', generate_release_notes=True))
         for asset in (binary, checksum, recovery, provenance):
             upload(github, draft, asset)
         github.request(f'/repos/{repo}/releases/{draft["id"]}', 'PATCH', dict(draft=False, make_latest='false' if release['stage'] != 'stable' else 'true'))
         # Never expose an appcast entry until all binary assets are published successfully.
+        state['stage'] = 'Appcast publication (binary already published)'
         publish_feed(github, repo, data, head, tag)
+    write_summary(release, 'Complete', commit=commit)
     print('Release and appcast published successfully.')
 
 

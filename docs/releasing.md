@@ -6,7 +6,7 @@ Origami uses Sparkle 2.9.6 for direct macOS updates. Xcode Cloud owns Developer 
 
 Stable tags use `vMAJOR.MINOR.PATCH`. Beta tags use `vMAJOR.MINOR.PATCH-beta.N`, where `N` is a positive integer. Version components are nonnegative integers without leading zeroes. Zero beta numbers, metadata suffixes, whitespace, and other release stages are rejected.
 
-Marketing versions remain `MAJOR.MINOR.PATCH`; beta identity is stored separately. The app displays `Origami MAJOR.MINOR[.PATCH]` with `Beta N` appended for beta builds, omitting `.PATCH` when it is zero.
+Marketing versions remain `MAJOR.MINOR.PATCH`; beta identity is stored separately. The app displays `Origami MAJOR.MINOR.PATCH` with `Beta N` appended for beta builds. The full numeric marketing version is always displayed.
 
 `Origami/Updates/ReleaseIdentity.swift` is the single parser. The app uses it to validate bundle metadata; `scripts/release/VersionTool.swift` compiles with that same source for automation. No second tag parser exists in the workflows.
 
@@ -92,3 +92,9 @@ Retain the Sparkle private key securely: losing it can prevent installed clients
 No real Apple/GitHub/Sparkle release is exercised by the automated fixture tests. Account permissions, Cloud-managed signing, notarization artifact shape, Gatekeeper network assessment and installation still require the first real release. ZIP is the primary artifact; DMG, deltas, parallel maintenance feeds, and an authenticated private-repository updater are intentionally absent.
 
 References: [Sparkle sandbox integration](https://sparkle-project.org/documentation/sandboxing/), [Sparkle publishing](https://sparkle-project.org/documentation/publishing/), [Xcode Cloud build numbers](https://developer.apple.com/documentation/xcode/setting-the-next-build-number-for-xcode-cloud-builds/), [App Store Connect build runs](https://developer.apple.com/documentation/appstoreconnectapi/build-runs).
+
+### Release diagnostics
+
+Before starting Xcode Cloud, the runner reports the requested tag and commit, workflow enabled state, repository, and resolved tag reference. It checks manual tag conditions when the API exposes them. Apple JSON:API failures report only bounded, sanitized status, code, title, detail, and source pointer fields; non-JSON bodies are omitted. A rejected or ambiguous build-start POST is never automatically retried. Inspect the reported condition and the Cloud workflow before rerunning.
+
+GitHub generates release notes from repository history. Job summaries use the full marketing version and report success only after binary publication and the final appcast update. A startup failure instead identifies the App Store Connect stage and safe Apple diagnostics. The tests status in a successful summary reflects the configured Xcode Cloud workflow, which must run its tests before succeeding.

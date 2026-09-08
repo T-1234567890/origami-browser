@@ -27,10 +27,8 @@ struct ReleaseIdentity: Encodable, Equatable {
         prereleaseNumber = number
     }
     var displayVersion: String {
-        let parts = marketingVersion.split(separator: ".")
-        let short = parts.last == "0" ? parts.dropLast().joined(separator: ".") : marketingVersion
         let suffix = stage == .stable ? "" : " Beta \(prereleaseNumber!)"
-        return "Origami \(short)\(suffix)"
+        return "Origami \(marketingVersion)\(suffix)"
     }
     var channel: String? { stage == .stable ? nil : "beta" }
     var assetName: String { "Origami-\(tag.dropFirst()).zip" }

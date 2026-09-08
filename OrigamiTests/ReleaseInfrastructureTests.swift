@@ -3,7 +3,7 @@ import Testing
 @testable import Origami
 
 struct ReleaseInfrastructureTests {
-    @Test(arguments: [("v1.0.0", "Origami 1.0", ReleaseStage.stable), ("v1.0.0-beta.1", "Origami 1.0 Beta 1", .beta), ("v1.2.3", "Origami 1.2.3", .stable), ("v2.3.4-beta.12", "Origami 2.3.4 Beta 12", .beta)])
+    @Test(arguments: [("v1.0.0", "Origami 1.0.0", ReleaseStage.stable), ("v1.0.0-beta.1", "Origami 1.0.0 Beta 1", .beta), ("v1.2.3", "Origami 1.2.3", .stable), ("v2.3.4-beta.12", "Origami 2.3.4 Beta 12", .beta)])
     func validTags(tag: String, display: String, stage: ReleaseStage) throws {
         let identity = try ReleaseIdentity(tag: tag, buildNumber: 101)
         #expect(identity.displayVersion == display)
@@ -27,13 +27,13 @@ struct ReleaseInfrastructureTests {
         #expect(UpdatePreferences(defaults: defaults).channel == .beta)
         for stage in ReleaseStage.allCases { #expect(UpdateChannel.beta.accepts(stage)) }
         #expect(UpdateChannel.beta.sparkleChannels == ["beta"])
-        #expect(installed.stage == .stable); #expect(installed.displayVersion == "Origami 1.0")
+        #expect(installed.stage == .stable); #expect(installed.displayVersion == "Origami 1.0.0")
         preferences.channel = .stable
         #expect(installed.buildNumber == 103)
     }
     @Test func bundleMetadataValidation() {
         var info: [String: Any] = ["OrigamiReleaseTag": "v1.0.0-beta.1", "OrigamiReleaseStage": "beta", "OrigamiPrereleaseNumber": "1", "CFBundleVersion": "102", "CFBundleShortVersionString": "1.0.0"]
-        #expect(ReleaseIdentity.from(info: info)?.displayVersion == "Origami 1.0 Beta 1")
+        #expect(ReleaseIdentity.from(info: info)?.displayVersion == "Origami 1.0.0 Beta 1")
         info["OrigamiReleaseStage"] = "stable"
         #expect(ReleaseIdentity.from(info: info) == nil)
         #expect(ReleaseIdentity.from(info: [:]) == nil)

@@ -54,7 +54,7 @@ class ReleaseTests(unittest.TestCase):
         if result.returncode: raise ValueError('Invalid version')
         return json.loads(result.stdout)
     def test_tag_contract(self):
-        for tag, title, stage in [('v1.0.0', 'Origami 1.0', 'stable'), ('v1.0.0-beta.1', 'Origami 1.0 Beta 1', 'beta'), ('v1.0.0-beta.12', 'Origami 1.0 Beta 12', 'beta')]:
+        for tag, title, stage in [('v1.0.0', 'Origami 1.0.0', 'stable'), ('v1.0.0-beta.1', 'Origami 1.0.0 Beta 1', 'beta'), ('v1.0.0-beta.12', 'Origami 1.0.0 Beta 12', 'beta')]:
             with self.subTest(tag=tag):
                 result = self.version(tag)
                 self.assertEqual(result['displayVersion'], title); self.assertEqual(result['marketingVersion'], '1.0.0'); self.assertEqual(result['stage'], stage)
@@ -197,6 +197,7 @@ class ReleaseTests(unittest.TestCase):
             def request(path, method='GET', body=None, **kwargs):
                 if method == 'GET': return None
                 if method == 'POST':
+                    self.assertTrue(body['generate_release_notes'])
                     self.assertEqual(body['prerelease'], '-beta.' in tag)
                     self.assertEqual(body['name'], self.version(tag)['displayVersion'])
                 else:

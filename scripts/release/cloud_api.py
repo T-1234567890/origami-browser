@@ -1,7 +1,8 @@
-"""ASC API orchestration. Errors intentionally exclude response bodies, tokens and URLs."""
+"""ASC orchestration with bounded, sanitized JSON:API diagnostics."""
 import base64
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,7 +13,46 @@ from urllib.parse import urlsplit
 
 
 class ReleaseError(RuntimeError):
-    pass
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+def safe_diagnostic(value, secrets=()):
+    if not isinstance(value, str):
+        return ''
+    # Redact before truncating, including credentials echoed inside otherwise safe fields.
+    for secret in (*secrets, *(v for k, v in os.environ.items()
+                              if any(word in k.upper() for word in ('TOKEN', 'SECRET', 'PRIVATE_KEY', 'PASSWORD')))):
+        if secret:
+            value = value.replace(secret, '[redacted]')
+    value = re.sub(r'-----BEGIN .*?-----.*?-----END .*?-----', '[redacted]', value, flags=re.S)
+    value = re.sub(r'https?://\S+', '[URL redacted]', value)
+    value = re.sub(r'(?i)(authorization\s*[:=]?\s*|bearer\s+|(?:password|token|secret|api[_ -]?key)\s*[:=]\s*)\S+', '[redacted]', value)
+    value = re.sub(r'[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}', '[redacted]', value)
+    value = re.sub(r'[A-Za-z0-9+/=_-]{40,}', '[redacted]', value)
+    return ' '.join(value.split())[:1000].replace('::', ': :')
+
+
+def api_error(status, method, payload, secrets=()):
+    lines = [f'API {method} failed (HTTP {status})']
+    try:
+        document = json.loads(payload)
+        errors = document.get('errors', []) if isinstance(document, dict) else []
+        if isinstance(errors, list):
+            for index, error in enumerate(errors[:20], 1):
+                if not isinstance(error, dict):
+                    continue
+                fields = {key: error.get(key) for key in ('code', 'title', 'detail')}
+                if isinstance(error.get('source'), dict):
+                    fields['source.pointer'] = error['source'].get('pointer')
+                fields = [(key, safe_diagnostic(value, secrets)) for key, value in fields.items()]
+                fields = [(key, value) for key, value in fields if value]
+                if fields:
+                    lines.append(f'Apple error {index}: ' + '; '.join(f'{key}: {value}' for key, value in fields))
+    except (ValueError, UnicodeError):
+        pass
+    return ReleaseError('\n'.join(lines), status=status)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -89,7 +129,13 @@ class API:
                     return None
                 if method == 'GET' and error.code in (429, 502, 503, 504) and attempt < 3:
                     time.sleep(2 ** attempt); continue
-                raise ReleaseError(f'API {method} failed (HTTP {error.code})') from None
+                if urlsplit(self.base).hostname == 'api.appstoreconnect.apple.com':
+                    try:
+                        payload = error.read(65536)
+                    except OSError:
+                        payload = b''
+                    raise api_error(error.code, method, payload, (headers['Authorization'], headers['Authorization'][7:])) from None
+                raise ReleaseError(f'API {method} failed (HTTP {error.code})', status=error.code) from None
             except (OSError, ValueError):
                 raise ReleaseError(f'API {method} transport or response failure') from None
 
@@ -106,19 +152,46 @@ class API:
             path = page.get('links', {}).get('next')
 
 
-def run_cloud(api, workflow_id, tag, commit, timeout=7200, clock=time.monotonic, sleep=time.sleep):
+def run_cloud(api, workflow_id, tag, commit, timeout=7200, clock=time.monotonic, sleep=time.sleep, on_started=None):
     workflow = api.request(f'/v1/ciWorkflows/{workflow_id}')['data']
     if not workflow['attributes'].get('isEnabled'):
         raise ReleaseError('Xcode Cloud workflow is disabled')
+    attributes = workflow['attributes']
+    if 'manualTagStartCondition' in attributes:
+        condition = attributes['manualTagStartCondition']
+        if not condition:
+            raise ReleaseError('Xcode Cloud workflow does not permit manual tag builds')
+        source = condition.get('source', {})
+        if source.get('isAllMatch') is not True:
+            patterns = source.get('patterns', [])
+            if not any(isinstance(p.get('pattern'), str) and
+                       (tag.startswith(p['pattern']) if p.get('isPrefix') else tag == p['pattern']) for p in patterns):
+                raise ReleaseError('Release tag does not match the workflow manual tag conditions')
+    else:
+        print('Cloud preflight: manual tag conditions were not exposed by the API.', flush=True)
     repository = api.request(f'/v1/ciWorkflows/{workflow_id}/repository')['data']
     refs = [ref for ref in api.all(f'/v1/scmRepositories/{repository["id"]}/gitReferences')
-            if ref['attributes'].get('canonicalName') == 'refs/tags/' + tag
-            and ref['attributes'].get('kind') == 'TAG' and not ref['attributes'].get('isDeleted')]
+            if ref['attributes'].get('canonicalName') == 'refs/tags/' + tag]
     if len(refs) != 1:
         raise ReleaseError('Release tag was not uniquely resolved by Xcode Cloud')
+    ref = refs[0]
+    if ref['attributes'].get('kind') != 'TAG' or ref['attributes'].get('isDeleted'):
+        raise ReleaseError('Resolved release reference is not an active TAG')
+    # The repository-scoped collection establishes membership; reject conflicting linkage.
+    linked = ref.get('relationships', {}).get('repository', {}).get('data')
+    if linked is not None and linked.get('id') != repository['id']:
+        raise ReleaseError('Release reference belongs to another repository')
+    for label, value in [('tag', tag), ('commit SHA', commit), ('workflow ID', workflow_id),
+                         ('workflow enabled', 'true'), ('repository', repository.get('attributes', {}).get('repositoryName', repository['id'])),
+                         ('scmGitReference ID', ref['id']), ('canonicalName', ref['attributes']['canonicalName']),
+                         ('reference kind', ref['attributes']['kind'])]:
+        # SHA and reference identifiers are public release provenance, not credentials.
+        print(f'Cloud preflight {label}: {safe_diagnostic(value) if label != "commit SHA" else value}', flush=True)
     relationships = dict(workflow=dict(data=dict(type='ciWorkflows', id=workflow_id)),
                          sourceBranchOrTag=dict(data=dict(type='scmGitReferences', id=refs[0]['id'])))
     run = api.request('/v1/ciBuildRuns', 'POST', dict(data=dict(type='ciBuildRuns', attributes=dict(clean=True), relationships=relationships)))['data']
+    if on_started:
+        on_started()
     print('Xcode Cloud build started; waiting for its notarized artifact.', flush=True)
     deadline = clock() + timeout
     while True:
