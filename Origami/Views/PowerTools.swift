@@ -58,7 +58,7 @@ struct QuickTools: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
         }.padding(16).frame(width: 290, height: 480)
-            .task(id: page?.currentURL) { await page?.discoverFeeds() }
+            .task(id: page?.currentURL) { await page?.discoverDocuments() }
             .sheet(isPresented: $credibility) { AIContextSheet(store: store, action: .credibility) }
             .sheet(isPresented: $scripts) { ScriptManager(store: store) }
             .sheet(isPresented: Binding(get: { output != nil }, set: { if !$0 { output = nil } })) {

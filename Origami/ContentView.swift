@@ -308,7 +308,7 @@ struct BrowserContentView: View {
                     NativeInternalSurface(store: store, destination: destination, tabID: tab.id)
                         .id("\(tab.id)-\(destination.rawValue)-\(page.nativeRevision)")
                 } else if page.readerVisible, let article = page.article {
-                    ReaderView(article: article, url: page.currentURL) { page.readerVisible = false }
+                    ReaderView(article: article, url: page.currentURL, userAgent: page.webView.customUserAgent) { page.readerVisible = false }
                         .environment(\.openURL, OpenURLAction { url in
                             guard ["http", "https"].contains(url.scheme) else { return .discarded }
                             store.newTab(url: url); return .handled

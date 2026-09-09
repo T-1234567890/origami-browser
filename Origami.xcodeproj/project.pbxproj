@@ -108,7 +108,7 @@
 			children = (
 				AC0000000000000000000004 /* Configuration/Updates.xcconfig */,
 			);
-			name = "Configuration";
+			name = Configuration;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

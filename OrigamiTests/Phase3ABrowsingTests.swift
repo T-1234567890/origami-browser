@@ -153,6 +153,58 @@ import GRDB
         #expect(controls.error == nil)
     }
 
+    @Test(.timeLimit(.minutes(1))) func readerRefreshFindsLateDocumentationAndRejectsLinkLists() async throws {
+        let page = TabPage()
+        defer { page.dispose() }
+        page.webView.loadHTMLString("<html><head><title>Documentation</title></head><body><main id='content'></main></body></html>", baseURL: URL(string: "https://example.invalid/docs"))
+        let deadline = Date().addingTimeInterval(15)
+        while page.webView.isLoading || page.webView.title != "Documentation" {
+            guard Date() < deadline else { throw RepositoryError.invalidInput }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        page.documentTask?.cancel()
+        await page.discoverDocuments()
+        #expect(page.article == nil)
+        let paragraph = "Choose the technologies for your application and create its interface using native components. Each platform defines the look and behavior of its controls. Build your interface with standard views and manage the data that supports them. These approaches help your application provide a consistent experience."
+        // Content arrives after the initial discovery, as on client-rendered documentation sites.
+        let html = "<h1>Documentation</h1><p>" + paragraph + "</p><p>" + paragraph + "</p>"
+        _ = try await page.webView.callAsyncJavaScript("document.getElementById('content').innerHTML = html", arguments: ["html": html], in: nil, contentWorld: .defaultClient)
+        await page.discoverDocuments()
+        #expect(try #require(page.article).markdown.contains("native components"))
+        page.article = nil
+        _ = try await page.webView.callAsyncJavaScript("document.getElementById('content').innerHTML = html", arguments: ["html": "<h1>Links</h1><p><a href='/one'>" + paragraph + "</a></p><p><a href='/two'>" + paragraph + "</a></p>"], in: nil, contentWorld: .defaultClient)
+        await page.discoverDocuments()
+        #expect(page.article == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func readerPreservesSafeArticleMediaInOrder() async throws {
+        let page = TabPage()
+        defer { page.dispose() }
+        let prose = String(repeating: "This article explains native interfaces and accessible interactions with practical examples. ", count: 5)
+        let html = "<html><head><title>Media article</title></head><body><article><h1>Media article</h1><p>Before image. " + prose + "</p><figure><img data-src='/photo.png' alt='Article photograph'></figure><p>Between media. " + prose + "</p><video preload='none' src='/clip.mp4' title='Demonstration'></video><p>After video. " + prose + "</p><iframe data-src='https://video.example.invalid/embed/123' title='Embedded demonstration'></iframe><img data-src='javascript:alert(1)'><img data-src='https://user:pass@example.invalid/private.png'></article></body></html>"
+        page.webView.loadHTMLString(html, baseURL: URL(string: "https://example.invalid/article"))
+        let deadline = Date().addingTimeInterval(15)
+        while page.webView.isLoading || page.webView.title != "Media article" {
+            guard Date() < deadline else { throw RepositoryError.invalidInput }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        await page.discoverDocuments()
+        let article = try #require(page.article)
+        #expect(article.media.count == 3)
+        #expect(article.media[2].kind == "embed")
+        #expect(article.media[0].url?.absoluteString == "https://example.invalid/photo.png")
+        #expect(article.media[1].kind == "video")
+        let blocks = article.markdown.components(separatedBy: "\n\n")
+        let image = try #require(blocks.firstIndex { article.mediaBlock($0)?.kind == "image" })
+        let video = try #require(blocks.firstIndex { article.mediaBlock($0)?.kind == "video" })
+        #expect(image < video)
+        #expect(article.exportMarkdown.contains("![Article photograph](https://example.invalid/photo.png)"))
+        #expect(!article.exportMarkdown.contains("origami-media:"))
+        for unsafe in ["file:///tmp/image.png", "javascript:alert(1)", "https://user:pass@example.invalid/image"] {
+            #expect(ReaderMedia.safeURL(unsafe) == nil)
+        }
+    }
+
     @Test(.timeLimit(.minutes(1))) func readerExtractsArticleInWebKit() async throws {
         let page = TabPage()
         defer { page.dispose() }

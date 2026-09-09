@@ -164,7 +164,7 @@ import WebKit
         if selection {
             text = try await page.webView.callAsyncJavaScript("return window.getSelection()?.toString().slice(0,20000) || '';", arguments: [:], in: nil, contentWorld: .world(name: "Origami.AIExtraction")) as? String ?? ""
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIError.noSelection }
-        } else if let article = page.article { text = String(article.markdown.prefix(30000)) }
+        } else if let article = page.article { text = String(article.exportMarkdown.prefix(30000)) }
         else {
             text = try await page.webView.callAsyncJavaScript("const root=document.querySelector('article,main') || document.body; const clone=root.cloneNode(true); clone.querySelectorAll('input,textarea,select,script,style,[contenteditable],[hidden],[aria-hidden=true],nav,footer').forEach(e=>e.remove()); return (clone.textContent || '').slice(0,30000);", arguments: [:], in: nil, contentWorld: .world(name: "Origami.AIExtraction")) as? String ?? ""
         }

@@ -241,6 +241,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         article = nil; readerVisible = false; jsonText = nil; discoveredFeeds = []
         guard nativePage == nil else { return }
         recordWebNavigation()
+        scheduleDocumentDiscovery()
         mediaObserver.reset()
         errorMessage = nil
         requestedURL = nil
