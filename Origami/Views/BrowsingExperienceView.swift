@@ -26,7 +26,10 @@ struct BrowsingExperienceView: View {
                         pane(split.right).frame(width: availableWidth * (1 - liveFraction))
                     }
                     .task(id: split) { _ = store.page(for: split.left); _ = store.page(for: split.right) }
-                } else { BrowserContentView(store: store) }
+                } else {
+                    BrowserContentView(store: store)
+                        .modifier(PageSplitDropSurface(store: store, id: store.session.selectedTabID))
+                }
                 if let peek = store.peekPage {
                     let paneOffset = store.session.activeSplit?.right == store.peekSourceID ? availableWidth * liveFraction + 6 : 0
                     let paneWidth = store.session.activeSplit == nil ? geometry.size.width : availableWidth * (paneOffset == 0 ? liveFraction : 1 - liveFraction)
@@ -64,6 +67,8 @@ struct BrowsingExperienceView: View {
                 }
             }
         }
+        .onPreferenceChange(PageDropFramePreference.self) { store.pageDropFrames = $0 }
+        .onDisappear { store.pageDropFrames = [:]; store.splitDropPreview = nil }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.session.activeSplit != nil)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: store.peekPage != nil)
         .onChange(of: store.selectedTab?.id) { store.dismissPeek() }
@@ -73,6 +78,7 @@ struct BrowsingExperienceView: View {
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: BrowserChromeMetrics.contentCornerRadius))
             .simultaneousGesture(TapGesture().onEnded { store.select(id) })
+            .modifier(PageSplitDropSurface(store: store, id: id))
     }
 }
 
@@ -99,5 +105,35 @@ private struct PeekDismissMonitor: NSViewRepresentable {
             }
         }
         deinit { if let token { NSEvent.removeMonitor(token) } }
+    }
+}
+
+private struct PageSplitDropSurface: ViewModifier {
+    let store: BrowserStore
+    let id: UUID?
+    func body(content: Content) -> some View {
+        content.overlay {
+            GeometryReader { geometry in
+                if let id {
+                    Color.clear.preference(key: PageDropFramePreference.self,
+                                           value: [id: geometry.frame(in: .global)])
+                    if let target = store.splitDropPreview, target.pageID == id {
+                        RoundedRectangle(cornerRadius: BrowserChromeMetrics.contentCornerRadius)
+                            .fill(Personalization.shared.accent.opacity(0.18))
+                            .overlay { RoundedRectangle(cornerRadius: BrowserChromeMetrics.contentCornerRadius)
+                                .strokeBorder(Personalization.shared.accent, lineWidth: 2) }
+                            .frame(width: geometry.size.width / 2)
+                            .offset(x: target.onLeft ? 0 : geometry.size.width / 2)
+                    }
+                }
+            }.allowsHitTesting(false)
+        }
+    }
+}
+
+private struct PageDropFramePreference: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
     }
 }

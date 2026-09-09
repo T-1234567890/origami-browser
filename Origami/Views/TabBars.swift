@@ -51,9 +51,12 @@ struct TabBars: View {
                 guard draggedTab != nil || draggedGroup != nil else { return }
                 dragLocation = value.location
                 dropTarget = target(at: value.location)
+                store.splitDropPreview = draggedTab.flatMap { store.pageSplitTarget(for: $0, at: value.location) }
             }
             .onEnded { value in
-                if let draggedTab, splitMemberFrames[draggedTab] != nil {
+                if let draggedTab, let pageTarget = store.pageSplitTarget(for: draggedTab, at: value.location) {
+                    store.dropTabIntoPage(draggedTab, target: pageTarget)
+                } else if let draggedTab, splitMemberFrames[draggedTab] != nil {
                     let combined = splitMemberFrames.values.reduce(CGRect.null) { $0.union($1) }
                     if !combined.insetBy(dx: -8, dy: -8).contains(value.location) {
                         store.detachSplitTab(draggedTab, target: target(at: value.location))
@@ -64,8 +67,9 @@ struct TabBars: View {
                         else if let draggedTab { store.dropTab(draggedTab, target: target) }
                     }
                 }
-                draggedTab = nil; draggedGroup = nil; dropTarget = nil
+                draggedTab = nil; draggedGroup = nil; dropTarget = nil; store.splitDropPreview = nil
             })
+        .onDisappear { store.splitDropPreview = nil }
         .overlay(alignment: .topLeading) {
             if draggedTab != nil || draggedGroup != nil {
                 dragPreview
@@ -89,6 +93,7 @@ struct TabBars: View {
     }
 
     private var dropDescription: String {
+        if let preview = store.splitDropPreview { return preview.onLeft ? "Split on left" : "Split on right" }
         switch dropTarget {
         case .group(let id):
             let name = store.session.groups.first { $0.id == id }?.name ?? "group"

@@ -52,6 +52,34 @@ import GRDB
         #expect(!app.stores.values.contains { $0.isPrivate })
     }
 
+    @Test func draggingTabsIntoPageUsesDropSideAndRetainsPages() throws {
+        let store = BrowserStore()
+        defer { store.pages.values.forEach { $0.dispose() } }
+        let current = try #require(store.session.selectedTabID)
+        let dragged = store.newTab()
+        store.select(current)
+        let originalPage = store.page(for: current)
+        let draggedPage = store.page(for: dragged)
+        store.pageDropFrames = [current: CGRect(x: 200, y: 100, width: 800, height: 600)]
+        #expect(store.pageSplitTarget(for: current, at: CGPoint(x: 300, y: 200)) == nil)
+        #expect(store.pageSplitTarget(for: dragged, at: CGPoint(x: 100, y: 200)) == nil)
+        #expect(store.pageSplitTarget(for: UUID(), at: CGPoint(x: 300, y: 200)) == nil)
+        let left = try #require(store.pageSplitTarget(for: dragged, at: CGPoint(x: 300, y: 200)))
+        store.dropTabIntoPage(dragged, target: left)
+        #expect(store.session.activeSplit == BrowserSplit(left: dragged, right: current))
+        let right = try #require(store.pageSplitTarget(for: dragged, at: CGPoint(x: 800, y: 200)))
+        store.dropTabIntoPage(dragged, target: right)
+        #expect(store.session.activeSplit == BrowserSplit(left: current, right: dragged))
+        #expect(store.pages[current] === originalPage)
+        #expect(store.pages[dragged] === draggedPage)
+        #expect(store.session.tabs.count == 2)
+        store.dropTabIntoPage(current, target: PageSplitDropTarget(pageID: current, onLeft: true))
+        #expect(store.session.activeSplit == BrowserSplit(left: current, right: dragged))
+        store.detachSplitTab(dragged)
+        #expect(store.session.split == nil)
+        #expect(store.session.visibleTabIDs.count == 2)
+    }
+
     @Test func splitPersistsSwapsAndCollapsesWhenTabCloses() throws {
         let db = try DatabaseManager()
         _ = try ProfileRepository(db).ensureDefault()

@@ -2,7 +2,31 @@ import Foundation
 import AppKit
 import CoreGraphics
 
+struct PageSplitDropTarget: Equatable {
+    let pageID: UUID
+    let onLeft: Bool
+}
+
 extension BrowserStore {
+    func pageSplitTarget(for draggedID: UUID, at point: CGPoint) -> PageSplitDropTarget? {
+        guard session.tabs.contains(where: { $0.id == draggedID }),
+              let hit = pageDropFrames.first(where: { $0.value.contains(point) }),
+              hit.key != draggedID, session.tabs.contains(where: { $0.id == hit.key }) else { return nil }
+        return PageSplitDropTarget(pageID: hit.key, onLeft: point.x < hit.value.midX)
+    }
+
+    func dropTabIntoPage(_ id: UUID, target: PageSplitDropTarget) {
+        guard id != target.pageID,
+              session.tabs.contains(where: { $0.id == id }),
+              session.tabs.contains(where: { $0.id == target.pageID }) else { return }
+        session.split = target.onLeft
+            ? BrowserSplit(left: id, right: target.pageID)
+            : BrowserSplit(left: target.pageID, right: id)
+        wake(id); wake(target.pageID)
+        _ = page(for: id); _ = page(for: target.pageID)
+        select(id)
+    }
+
     func openPeek(_ url: URL) {
         dismissPeek()
         guard LinkPeekObserver.canPreview(url) else { return }
