@@ -49,16 +49,7 @@ final class PowerRepository {
     func remove(_ script: UserScript, profile: UUID) throws {
         try database.queue.write { db in try db.execute(sql: "DELETE FROM user_scripts WHERE id=? AND profile_id=?", arguments: [script.id, profile.uuidString]) }
     }
-    func references(_ profile: UUID) throws -> [PageCitation] {
-        try database.queue.read { db in try Data.fetchAll(db, sql: "SELECT payload FROM citations WHERE profile_id=? ORDER BY created DESC", arguments: [profile.uuidString]).map { try JSONDecoder().decode(PageCitation.self, from: $0) } }
-    }
-    func add(_ citation: PageCitation, profile: UUID) throws {
-        let data = try JSONEncoder().encode(citation)
-        try database.queue.write { db in try db.execute(sql: "INSERT INTO citations(id,profile_id,payload,created) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING", arguments: [citation.id, profile.uuidString, data, Date().timeIntervalSince1970]) }
-    }
-    func removeCitation(_ id: String, profile: UUID) throws {
-        try database.queue.write { db in try db.execute(sql: "DELETE FROM citations WHERE id=? AND profile_id=?", arguments: [id, profile.uuidString]) }
-    }
+
 }
 
 @MainActor enum ScriptRuntime {

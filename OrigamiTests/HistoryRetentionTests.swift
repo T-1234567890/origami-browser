@@ -38,7 +38,6 @@ import GRDB
         try db.queue.write { sql in
             try sql.execute(sql: "INSERT INTO bookmarks(id,profile_id,title,url,position,created_at) VALUES(?,?,?,?,0,?)", arguments: [UUID().uuidString, profile.id.uuidString, "Saved", "https://example.com", old.timeIntervalSince1970])
             try sql.execute(sql: "INSERT INTO permissions(profile_id,origin,category,decision) VALUES(?,?,?,?)", arguments: [profile.id.uuidString, "https://example.com", "camera", "allow"])
-            try sql.execute(sql: "INSERT INTO citations(id,profile_id,payload,created) VALUES(?,?,?,?)", arguments: [UUID().uuidString, profile.id.uuidString, Data(), old.timeIntervalSince1970])
             try sql.execute(sql: "INSERT INTO downloads(id,profile_id,url,filename,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", arguments: [UUID().uuidString, profile.id.uuidString, "https://example.com/a", "a.txt", "completed", old.timeIntervalSince1970, old.timeIntervalSince1970])
             try sql.execute(sql: "INSERT INTO recently_closed(id,profile_id,window_id,tab_id,title,pinned,position,closed_at) VALUES(?,?,?,?,?,0,0,?)", arguments: [UUID().uuidString, profile.id.uuidString, UUID().uuidString, UUID().uuidString, "Old tab", old.timeIntervalSince1970])
         }
@@ -51,7 +50,7 @@ import GRDB
         #expect(try repo.event(tab: activeTab, profile: profile.id) != nil)
         try db.queue.read { (sql: Database) throws -> Void in
             #expect(try Int.fetchOne(sql, sql: "SELECT COUNT(*) FROM recently_closed") == 0)
-            for table in ["bookmarks", "permissions", "citations", "downloads"] {
+            for table in ["bookmarks", "permissions", "downloads"] {
                 #expect(try Int.fetchOne(sql, sql: "SELECT COUNT(*) FROM " + table) == 1)
             }
             #expect(try Int.fetchOne(sql, sql: "SELECT MAX(visit_count) FROM history_pages") == 1)

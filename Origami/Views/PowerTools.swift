@@ -6,7 +6,6 @@ struct QuickTools: View {
     let store: BrowserStore
     var close: () -> Void
     @State private var scripts = false
-    @State private var credibility = false
     @State private var error: String?
     @State private var output: String?
     private var page: TabPage? { store.visiblePage }
@@ -27,8 +26,6 @@ struct QuickTools: View {
                         command("Find", "magnifyingglass") { close(); store.showingFind = true }
                         command("Print", "printer") { page?.webView.printOperation(with: .shared).run() }
                         command("Save PDF…", "square.and.arrow.down") { savePDF() }
-                        command("Cite Page", "quote.opening") { cite(false) }
-                        command("Cite Selection", "text.quote") { cite(true) }
                     }.disabled(page?.nativePage != nil || page == nil)
                     section("RSS") {
                         command("RSS Feeds", "dot.radiowaves.left.and.right") { close(); store.openInternal(.feeds) }
@@ -47,19 +44,11 @@ struct QuickTools: View {
                         ForEach(ScriptRuntime.builtins) { script in command(script.name, "curlybraces") { run(script) }.disabled(page?.nativePage != nil || page == nil) }
                         command("Manage Scripts…", "slider.horizontal.3") { scripts = true }
                     }
-                    section("Citations") {
-                        if AISettings.aiPeekAvailable {
-                        command("Evaluate Credibility", "checkmark.shield") { credibility = true }
-                            .disabled(page?.nativePage != nil || page == nil)
-                        }
-                        command("Saved References…", "books.vertical") { close(); store.openInternal(.references) }
-                    }
                     if let error { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
         }.padding(16).frame(width: 290, height: 480)
             .task(id: page?.currentURL) { await page?.discoverDocuments() }
-            .sheet(isPresented: $credibility) { AIContextSheet(store: store, action: .credibility) }
             .sheet(isPresented: $scripts) { ScriptManager(store: store) }
             .sheet(isPresented: Binding(get: { output != nil }, set: { if !$0 { output = nil } })) {
                 VStack(alignment: .leading) {
@@ -74,10 +63,6 @@ struct QuickTools: View {
     }
     private func command(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Label(title, systemImage: icon).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }.buttonStyle(.plain).padding(.vertical, 3)
-    }
-    private func cite(_ selection: Bool) {
-        guard let page else { return }
-        Task { do { let draft = try await PageCitation.extract(page, selection: selection); close(); store.citationDraft = draft; error = nil } catch { self.error = error.localizedDescription } }
     }
     private func run(_ script: UserScript) {
         guard let page else { return }
@@ -151,92 +136,6 @@ struct ScriptEditor: View {
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
             HStack { Spacer(); Button("Cancel") { dismiss() }; Button("Save") { save(script) }.keyboardShortcut(.defaultAction).disabled(script.name.isEmpty || script.patterns.isEmpty) }
         }.padding(20).frame(width: 620, height: 480)
-    }
-}
-
-struct CitationPanel: View {
-    let store: BrowserStore
-    @State var citation: PageCitation
-    var onClose: (() -> Void)? = nil
-    @State private var preview = ""
-    @State private var editing = false
-    @State private var format = "APA"
-    @State private var message: String?
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Cite Page").font(.headline); Spacer()
-                Button(editing ? "Review" : "Edit") { editing.toggle() }
-            }
-            Picker("Format", selection: $format) { ForEach(PageCitation.formats, id: \.self) { Text(PageCitation.formatLabel($0)).tag($0) } }
-            ScrollView { Text(preview.isEmpty ? "Formatting citation…" : preview).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                .frame(height: 100).clipped()
-            ScrollView {
-            if editing {
-            Form {
-                TextField("Title", text: $citation.title)
-                TextField("Author(s)", text: $citation.author)
-                TextField("Publisher", text: $citation.publisher)
-                TextField("Published", text: $citation.published)
-                TextField("Updated", text: $citation.updated)
-                TextField("URL", text: $citation.url)
-                TextField("DOI", text: $citation.doi)
-                TextField("Accessed", text: $citation.accessed)
-                if !citation.quotation.isEmpty { TextField("Quotation", text: $citation.quotation, axis: .vertical).lineLimit(2...4) }
-            }
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array([( "Title", citation.title), ("Author(s)", citation.author), ("Publisher", citation.publisher), ("Published", citation.published), ("Updated", citation.updated), ("URL", citation.url), ("DOI", citation.doi), ("Accessed", citation.accessed), ("Quotation", citation.quotation)].enumerated()), id: \.offset) { _, item in
-                        if !item.1.isEmpty { LabeledContent(item.0) { Text(item.1).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) } }
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
-            Link("CSL formatting · citeproc-js © Frank Bennett", destination: URL(string: "https://github.com/Juris-M/citeproc-js")!).font(.caption).foregroundStyle(.secondary)
-            if let message { Text(message).font(.caption) }
-            HStack { Button("Copy Citation") { copyText(preview) }.disabled(preview.isEmpty); Button("Add to References") { do { try store.services?.power.add(citation, profile: store.session.profileID); finish() } catch { message = error.localizedDescription } }; Spacer(); Button("Done") { finish() } }
-        }.padding(20).frame(width: 570, height: 550).background(Color(nsColor: .windowBackgroundColor)).clipShape(RoundedRectangle(cornerRadius: 14))
-        .task(id: ((try? JSONEncoder().encode(citation).base64EncodedString()) ?? "") + format) { await updatePreview() }
-        .onExitCommand { finish() }
-    }
-    private func finish() { if let onClose { onClose() } else { dismiss() } }
-    private func updatePreview() async {
-        preview = ""
-        do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-        let value = await CitationFormattingWorker.shared.format(citation, style: format)
-        guard !Task.isCancelled else { return }
-        preview = value
-    }
-
-}
-
-struct ReferenceCollection: View {
-    let store: BrowserStore
-    @State private var citations: [PageCitation] = []
-    @State private var format = "BibTeX"
-    @State private var error: String?
-    var body: some View {
-        VStack(alignment: .leading) {
-            HStack { Text("References").font(.title2); Spacer() }
-            Picker("Export format", selection: $format) { ForEach(PageCitation.exportFormats, id: \.self) { Text(PageCitation.formatLabel($0)).tag($0) } }
-            List(citations) { item in
-                HStack { VStack(alignment: .leading) { Text(item.title); Text(item.url).font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Copy") { Task { copyText(await CitationFormattingWorker.shared.format(item, style: format)) } }; Button("Remove", role: .destructive) { do { try store.services?.power.removeCitation(item.id, profile: store.session.profileID); load() } catch { self.error = error.localizedDescription } } }
-            }
-            if let error { Text(error).font(.caption) }
-            HStack { Spacer(); Button("Copy All") { Task { copyText(await collectionText()) } }; Button("Export…", action: export).disabled(citations.isEmpty) }
-        }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .textBackgroundColor)).task { load() }
-    }
-    private func collectionText() async -> String {
-        let items = citations; let style = format
-        var output: [String] = []
-        for item in items { output.append(await CitationFormattingWorker.shared.format(item, style: style)) }
-        return output.joined(separator: "\n\n")
-    }
-    private func load() { do { citations = try store.services?.power.references(store.session.profileID) ?? [] } catch { self.error = error.localizedDescription } }
-    private func export() {
-        let panel = NSSavePanel(); panel.nameFieldStringValue = "References." + (format == "BibTeX" ? "bib" : format == "RIS" ? "ris" : format == "Markdown" ? "md" : "txt")
-        panel.begin { result in guard result == .OK, let url = panel.url else { return }; let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }; Task { let output = await collectionText(); let writing = url.startAccessingSecurityScopedResource(); defer { if writing { url.stopAccessingSecurityScopedResource() } }; do { try output.write(to: url, atomically: true, encoding: .utf8) } catch { self.error = error.localizedDescription } } }
     }
 }
 

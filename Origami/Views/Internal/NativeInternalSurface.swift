@@ -37,7 +37,6 @@ struct NativeInternalSurface: View {
             case .downloads: NativeDownloads(model: model)
             case .data: NativeWebsiteData(model: model)
             case .permissions: NativePermissions(model: model)
-            case .references: ReferenceCollection(store: store)
             case .feeds: NativeFeeds(model: model)
             case .profiles: NativeProfiles(model: model)
             }

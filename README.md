@@ -15,7 +15,7 @@ Origami is a native macOS browser built with Swift, SwiftUI, and WebKit. It brin
 - **Horizontal or vertical tabs**, with Peek previews, two-pane Split View, and Reader for focused reading.
 - **Profiles and Private Browsing**, alongside native History, Bookmarks, and Downloads.
 - **Customization** for appearance, accent colors, tab density, and the New Tab page.
-- **Ask the Web**, plus page and selection questions, comparison, and citation tools when you choose to use AI.
+- **Ask the Web**, plus page and selection questions, and comparison tools when you choose to use AI.
 
 ## Ask the Web
 

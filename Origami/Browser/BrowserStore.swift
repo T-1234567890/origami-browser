@@ -12,7 +12,6 @@ final class BrowserStore {
     var bookmarkRevision = 0
     var preferencesRevision = 0
     var settingsCategory = "General"
-    var citationDraft: PageCitation?
     var splitDropPreview: PageSplitDropTarget?
     @ObservationIgnored var pageDropFrames: [UUID: CGRect] = [:]
     var showingFind = false

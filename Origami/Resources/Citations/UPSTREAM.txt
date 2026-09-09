@@ -1,7 +1,0 @@
-https://raw.githubusercontent.com/Juris-M/citeproc-js/cc9153c45293af878de08cafddbefe6ea150c380/citeproc.js
-https://raw.githubusercontent.com/Juris-M/citeproc-js/cc9153c45293af878de08cafddbefe6ea150c380/LICENSE
-https://raw.githubusercontent.com/citation-style-language/styles/1939c0252cb4f2dcb8c00804be864ce3c03e470d/apa.csl
-https://raw.githubusercontent.com/citation-style-language/styles/1939c0252cb4f2dcb8c00804be864ce3c03e470d/modern-language-association.csl
-https://raw.githubusercontent.com/citation-style-language/styles/1939c0252cb4f2dcb8c00804be864ce3c03e470d/chicago-author-date.csl
-https://raw.githubusercontent.com/citation-style-language/locales/9ded661fc7bb995a5453a2025ca826ff404a4fbd/locales-en-US.xml
-CSL styles: CC BY-SA 3.0 (see rights within each style).

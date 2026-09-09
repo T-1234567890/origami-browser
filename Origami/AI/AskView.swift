@@ -69,7 +69,6 @@ struct AskSurface: View {
                                     VStack(alignment: .leading, spacing: 3) { Text(source.title); Text(source.provenance + " · " + (URL(string: source.url)?.host ?? "")).font(.caption).foregroundStyle(.secondary) }
                                 }.buttonStyle(.plain)
                                 Spacer(); Button { open(source, peek: false) } label: { Image(systemName: "arrow.up.right") }.help("Visit reference in a new tab")
-                                Button { do { try store.services?.power.add(PageCitation(title: source.title, url: source.url), profile: store.session.profileID) } catch { store.persistenceError = error.localizedDescription } } label: { Image(systemName: "bookmark") }.help("Add Source to References")
                             }
                         }
                     }

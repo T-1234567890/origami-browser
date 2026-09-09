@@ -5,16 +5,13 @@ import GRDB
 @testable import Origami
 
 @MainActor struct Phase3ABrowsingTests {
-    @Test func fileLinksDoNotOpenPeekAndReferencesUseNativeTab() throws {
+    @Test func fileLinksDoNotOpenPeek() throws {
         let store = BrowserStore()
         defer { store.dismissPeek(); store.pages.values.forEach { $0.dispose() } }
         for address in ["https://example.com/image.JPG", "https://example.com/file.pdf?download=1", "https://example.com/app.dmg", "https://www.google.com/imgres?imgurl=https://example.com/a"] {
             store.openPeek(try #require(URL(string: address)))
             #expect(store.peekPage == nil)
         }
-        store.openInternal(.references)
-        #expect(store.selectedTab?.url == InternalPage.references.url)
-        #expect(InternalRoute.page(for: InternalPage.references.url) == .references)
     }
     @Test func peekPromotionRetainsWebViewAndDoesNotPersistUntilPromoted() throws {
         let store = BrowserStore()

@@ -4,14 +4,6 @@ import WebKit
 @testable import Origami
 
 @MainActor struct ExperienceCleanupTests {
-    @Test func standardStylesAreBundledAndFormatEditedMetadata() throws {
-        let citation = PageCitation(title: "A useful article", author: "Smith, Jane", publisher: "Example", published: "2024-03-04", url: "https://example.com/article")
-        #expect(PageCitation.formats == ["APA", "MLA", "Chicago"])
-        for style in PageCitation.formats {
-            let text = try #require(CitationProcessor.render(citation, style: style))
-            #expect(text.contains("2024") && text.contains("Smith") && text.contains("https://example.com/article"))
-        }
-    }
     @Test(.timeLimit(.minutes(1))) func readerRejectsSearchAndPreservesArticleLinks() async throws {
         let page = TabPage(); defer { page.dispose() }
         let paragraph = String(repeating: "A detailed explanation of this subject provides useful evidence and context for readers. ", count: 5)

@@ -1,7 +1,7 @@
 import Foundation
 
 enum InternalPage: String, CaseIterable {
-    case references, feeds, newtab, history, bookmarks, downloads, settings, data, permissions, profiles, welcome
+    case feeds, newtab, history, bookmarks, downloads, settings, data, permissions, profiles, welcome
     var url: URL { URL(string: "origami://" + rawValue)! }
     var title: String {
         switch self {

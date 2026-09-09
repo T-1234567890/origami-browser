@@ -136,7 +136,6 @@ private struct BrowserCommands: Commands {
             Button("JSON Reader") { store?.visiblePage?.readerVisible = false; store?.visiblePage?.showsJSON = true }.disabled(store?.visiblePage?.jsonText == nil)
         }
         CommandMenu("Library") {
-            Button("References") { browser().openInternal(.references) }
             Button("Websites I Follow") { browser().openInternal(.feeds) }
             Button("History") { browser().openInternal(.history) }.keyboardShortcut("y")
             Button("Bookmarks") { browser().openInternal(.bookmarks) }.keyboardShortcut("b", modifiers: [.command, .option])

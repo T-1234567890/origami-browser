@@ -119,7 +119,7 @@ struct NativeSettings: View {
                                 Text("30 days").tag(30); Text("90 days").tag(90); Text("180 days").tag(180); Text("1 year").tag(365); Text("Never").tag(0)
                             }.pickerStyle(.radioGroup)
                         } header: { Text("Automatically delete history") } footer: {
-                            Text("Applies to browsing history, recently closed tabs, and inactive Ask histories across profiles. Cookies, website data, bookmarks, references, and downloads are kept. Shortening this period deletes older history immediately.")
+                            Text("Applies to browsing history, recently closed tabs, and inactive Ask histories across profiles. Cookies, website data, bookmarks and downloads are kept. Shortening this period deletes older history immediately.")
                         }
                         Section {
                             Toggle("Block pop-ups and autoplay by default", isOn: setting($strict, key: "privacy", encode: { $0 ? "strict" : "standard" }))

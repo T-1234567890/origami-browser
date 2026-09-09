@@ -2,12 +2,7 @@ import Testing
 import Foundation
 @testable import Origami
 
-@MainActor struct CitationPresentationTests {
-    @Test func backgroundFormattingRetainsMetadata() async {
-        let citation = PageCitation(title: "A useful source", author: "Smith, Jane", published: "2024-01-01", url: "https://example.com/source")
-        let result = await CitationFormattingWorker.shared.format(citation, style: "APA")
-        #expect(result.contains("Smith") && result.contains("2024") && result.contains("https://example.com/source"))
-    }
+@MainActor struct AppearancePreferenceTests {
     @Test func gradientRetainsMainAccentAndCombinedFillPreference() throws {
         let name = "Origami.GradientTests." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))

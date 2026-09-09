@@ -106,19 +106,6 @@ struct ContentView: View {
                 }
             }.ignoresSafeArea().allowsHitTesting(false)
         }
-        .overlay {
-            if store.citationDraft != nil {
-                ZStack {
-                    Color.black.opacity(0.3).ignoresSafeArea().contentShape(Rectangle())
-                    Group {
-                        if let draft = store.citationDraft { CitationPanel(store: store, citation: draft, onClose: { store.citationDraft = nil }) }
-                    }
-                        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
-                        .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
-                }.transition(.opacity).zIndex(100)
-            }
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: store.citationDraft != nil)
         .overlay { AISetupPrompt(store: store) }
     }
 

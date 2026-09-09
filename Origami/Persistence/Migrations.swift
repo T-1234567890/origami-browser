@@ -1,7 +1,7 @@
 import GRDB
 
 enum Migrations {
-    static let names = ["v1_profiles", "v2_sessions", "v3_history", "v4_bookmarks", "v5_downloads", "v6_permissions", "v7_daily_browsing", "v8_site_rule_timestamps", "v9_group_appearance", "v10_profile_identity", "v11_split_view", "v12_feeds", "v13_power_tools", "v14_ai_search_events"]
+    static let names = ["v1_profiles", "v2_sessions", "v3_history", "v4_bookmarks", "v5_downloads", "v6_permissions", "v7_daily_browsing", "v8_site_rule_timestamps", "v9_group_appearance", "v10_profile_identity", "v11_split_view", "v12_feeds", "v13_power_tools", "v14_ai_search_events", "v15_remove_citation_generator"]
     static func make() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration(names[0]) { db in
@@ -113,6 +113,13 @@ enum Migrations {
                 CREATE TABLE ai_search_events(id TEXT PRIMARY KEY, profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, query TEXT NOT NULL, created REAL NOT NULL, payload BLOB NOT NULL);
                 CREATE INDEX ai_search_profile_date ON ai_search_events(profile_id,created DESC);
                 CREATE TABLE ai_answer_tabs(tab_id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES ai_search_events(id) ON DELETE CASCADE);
+                """)
+        }
+        migrator.registerMigration(names[14]) { db in
+            try db.execute(sql: """
+                DROP TABLE IF EXISTS citations;
+                UPDATE tabs SET url='origami://newtab', title='New Tab' WHERE url IN ('origami://references', 'origami://references/');
+                DELETE FROM recently_closed WHERE url IN ('origami://references', 'origami://references/');
                 """)
         }
         return migrator

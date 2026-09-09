@@ -9,6 +9,22 @@ struct FoundationTests {
         _ = try ProfileRepository(db).ensureDefault()
         return db
     }
+    @Test func retiredGeneratorStorageIsRemovedWithoutAffectingOtherTables() throws {
+        let db = try DatabaseManager(migrate: false)
+        let migrator = Migrations.make()
+        try migrator.migrate(db.queue, upTo: "v14_ai_search_events")
+        #expect(try db.queue.read { try $0.tableExists("citations") })
+        try migrator.migrate(db.queue)
+        try db.queue.read { database in
+            let hasRetiredStorage = try database.tableExists("citations")
+            #expect(!hasRetiredStorage)
+            for table in ["user_scripts", "feeds", "feed_articles", "ai_search_events", "bookmarks"] {
+                let exists = try database.tableExists(table)
+                #expect(exists)
+            }
+        }
+    }
+
     @Test func migrationsInitializeAndUpgrade() throws {
         let db = try DatabaseManager(migrate: false)
         let migrator = Migrations.make()
@@ -19,7 +35,8 @@ struct FoundationTests {
         try db.queue.read { (database: Database) throws -> Void in
             #expect(try String.fetchAll(database, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier") == Migrations.names.sorted())
             for table in ["profiles", "browser_sessions", "windows", "tabs", "tab_groups", "recently_closed", "history_pages", "history_visits", "bookmarks", "bookmark_folders", "downloads", "permissions"] {
-                #expect(try database.tableExists(table))
+                let exists = try database.tableExists(table)
+                #expect(exists)
             }
             #expect(try Int.fetchOne(database, sql: "PRAGMA foreign_keys") == 1)
         }
