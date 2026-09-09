@@ -7,6 +7,7 @@ struct TabBars: View {
     var sidebarFooter: AnyView? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frozenTabWidth: CGFloat?
+    @State private var splitMemberFrames: [UUID: CGRect] = [:]
     @State private var tabFrames: [UUID: CGRect] = [:]
     @State private var draggedTab: UUID?
     @State private var draggedGroup: UUID?
@@ -21,12 +22,13 @@ struct TabBars: View {
     @State private var groupColor = TabGroupColor.purple
     @State private var showingGroupName = false
 
-    private var pinnedTabs: [BrowserTab] { store.session.tabs.filter(\.isPinned) }
-    private var ungroupedTabs: [BrowserTab] { store.session.tabs.filter { !$0.isPinned && $0.groupID == nil } }
+    private var pinnedTabs: [BrowserTab] { store.session.tabs.filter { $0.isPinned && store.session.visibleTabIDs.contains($0.id) } }
+    private var ungroupedTabs: [BrowserTab] { store.session.tabs.filter { !$0.isPinned && $0.groupID == nil && store.session.visibleTabIDs.contains($0.id) } }
     private var scrollTarget: UUID? {
-        if let groupID = store.selectedTab?.groupID,
+        let anchorID = store.session.selectedTabID == store.session.split?.right ? store.session.split?.left : store.session.selectedTabID
+        if let groupID = store.session.tabs.first(where: { $0.id == anchorID })?.groupID,
            store.session.groups.contains(where: { $0.id == groupID && $0.isCollapsed }) { return groupID }
-        return store.session.selectedTabID
+        return anchorID
     }
 
     var body: some View {
@@ -35,6 +37,7 @@ struct TabBars: View {
             else { horizontalBar }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.session.groups.map(\.isCollapsed))
+        .onPreferenceChange(SplitMemberFramePreference.self) { splitMemberFrames = $0 }
         .onPreferenceChange(TabFramePreference.self) { tabFrames = $0 }
         .onPreferenceChange(GroupFramePreference.self) { groupFrames = $0 }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { barFrame = $0 }
@@ -42,14 +45,20 @@ struct TabBars: View {
             .onChanged { value in
                 if draggedTab == nil && draggedGroup == nil {
                     draggedGroup = groupFrames.first(where: { $0.value.contains(value.startLocation) })?.key
-                    draggedTab = tabFrames.first(where: { $0.value.contains(value.startLocation) })?.key
+                    draggedTab = splitMemberFrames.first(where: { $0.value.contains(value.startLocation) })?.key
+                        ?? tabFrames.first(where: { $0.value.contains(value.startLocation) })?.key
                 }
                 guard draggedTab != nil || draggedGroup != nil else { return }
                 dragLocation = value.location
                 dropTarget = target(at: value.location)
             }
             .onEnded { value in
-                if let target = target(at: value.location) {
+                if let draggedTab, splitMemberFrames[draggedTab] != nil {
+                    let combined = splitMemberFrames.values.reduce(CGRect.null) { $0.union($1) }
+                    if !combined.insetBy(dx: -8, dy: -8).contains(value.location) {
+                        store.detachSplitTab(draggedTab, target: target(at: value.location))
+                    }
+                } else if let target = target(at: value.location) {
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                         if let draggedGroup { store.dropGroup(draggedGroup, target: target) }
                         else if let draggedTab { store.dropTab(draggedTab, target: target) }
@@ -87,7 +96,7 @@ struct TabBars: View {
         case .tab(_, let after): return after ? "Move after tab" : "Move before tab"
         case .end: return "Move to end"
         case nil:
-            return "Release to cancel"
+            return draggedTab.flatMap { splitMemberFrames[$0] } != nil ? "Drag out to separate tabs" : "Release to cancel"
         }
     }
 
@@ -238,7 +247,7 @@ struct TabBars: View {
     }
 
     private func horizontalTabWidth(availableWidth: CGFloat) -> CGFloat {
-        let regularCount = ungroupedTabs.count + store.session.groups.filter { !$0.isCollapsed }.reduce(0) { $0 + tabs(in: $1).count }
+        let regularCount = ungroupedTabs.count + store.session.groups.filter { !$0.isCollapsed }.reduce(0) { $0 + tabs(in: $1).filter { store.session.visibleTabIDs.contains($0.id) }.count }
         let pinCount = pinnedTabs.count
         let groupCount = store.session.groups.count
         let separatorCount = pinCount == 0 ? 0 : 1
@@ -359,7 +368,54 @@ struct TabBars: View {
         showingGroupName = false
     }
 
+    private func combinedRow(_ left: BrowserTab, _ right: BrowserTab, width: CGFloat?) -> some View {
+        HStack(spacing: 0) {
+            splitMember(left)
+            Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 1, height: 16)
+            splitMember(right)
+        }
+        .frame(width: vertical ? nil : width, height: BrowserChromeMetrics.tabHeight)
+        .frame(maxWidth: vertical ? .infinity : nil)
+        .background(store.session.activeSplit != nil ? Personalization.shared.accent.opacity(0.18) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        .contextMenu {
+            Button("Separate Tabs") { store.endSplit() }
+            Button("Swap Split Sides") { store.swapSplit() }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Split tabs: \(left.title), \(right.title)")
+    }
+
+    private func splitMember(_ tab: BrowserTab) -> some View {
+        HStack(spacing: 0) {
+        Button { store.select(tab.id) } label: {
+            HStack(spacing: 4) {
+                SiteIcon(store: store, url: tab.url, size: 14)
+                Text(tab.title).font(.system(size: 11, weight: store.session.selectedTabID == tab.id ? .medium : .regular)).lineLimit(1)
+            }.frame(maxWidth: .infinity, minHeight: BrowserChromeMetrics.tabHeight)
+                .padding(.horizontal, 6).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .help(tab.title + " · Drag out to separate tabs")
+            .accessibilityLabel(tab.title)
+            .accessibilityIdentifier("tab-\(tab.id)")
+            Button { store.close(tab.id) } label: {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .medium)).frame(width: 20, height: 24)
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("Close " + tab.title).accessibilityLabel("Close " + tab.title)
+        }
+            .frame(maxWidth: .infinity)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: SplitMemberFramePreference.self, value: [tab.id: geometry.frame(in: .global)])
+                }
+            }
+    }
+
     private func row(_ tab: BrowserTab, width: CGFloat? = nil) -> some View {
+        Group {
+        if let split = store.session.split, split.left == tab.id,
+           let right = store.session.tabs.first(where: { $0.id == split.right }) {
+            combinedRow(tab, right, width: width)
+        } else {
         TabRow(store: store, tab: tab, vertical: vertical, width: width, close: {
             // Keep the next close button under the pointer while closing a run of tabs.
             if !vertical {
@@ -368,6 +424,8 @@ struct TabBars: View {
             }
             withAnimation(reduceMotion ? nil : .linear(duration: 0.18)) { store.close(tab.id) }
         })
+        }
+        }
         .background {
             GeometryReader { geometry in
                 Color.clear.preference(key: TabFramePreference.self, value: [tab.id: geometry.frame(in: .global)])
@@ -393,6 +451,13 @@ private struct TabFramePreference: PreferenceKey {
 }
 
 private struct GroupFramePreference: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+private struct SplitMemberFramePreference: PreferenceKey {
     static let defaultValue: [UUID: CGRect] = [:]
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })

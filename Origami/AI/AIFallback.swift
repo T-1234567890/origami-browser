@@ -32,6 +32,7 @@ enum AIAvailability {
         try await stream(provider: provider, input: input, update: { _ in })
     }
     func stream(provider: AIProviderID, input: AIRequest, update: @escaping @MainActor (AIProviderResult) -> Void) async throws -> AIProviderResult {
+        guard AISettings.aiPeekAvailable || (input.action != .peek && input.action != .credibility) else { throw AIError.featureDisabled }
         var input = input
         if input.searchEngine == "auto" { input.searchEngine = settings.searchEngine }
         let enabled = settings.automaticFallback(provider: provider)

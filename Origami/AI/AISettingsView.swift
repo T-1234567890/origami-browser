@@ -53,9 +53,6 @@ struct AISettingsView: View {
                     HStack {
                         Text("Choose your models").font(.headline)
                         Spacer()
-                        if settings.provider == .openRouter {
-                            Toggle("Free model tokens", isOn: $settings.freeModelsOnly).toggleStyle(.checkbox).font(.caption)
-                        }
                     }
                     if settings.provider == .openRouter {
                         Text("Free model pricing covers tokens. Web search is billed separately.").font(.caption).foregroundStyle(.secondary)
@@ -83,6 +80,17 @@ struct AISettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
+                if AISettings.aiPeekAvailable {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("AI Peek").font(.headline)
+                    Toggle("Enable AI Peek (experimental)", isOn: $settings.aiPeekEnabled)
+                    Toggle("Automatically summarize previews", isOn: $settings.aiPeekSummary).disabled(!settings.aiPeekEnabled)
+                    Toggle("Automatically evaluate preview credibility", isOn: $settings.aiPeekCredibility).disabled(!settings.aiPeekEnabled)
+                    Text("When enabled, every Peek sends page excerpts to your configured lightweight model. Credibility also uses web search. Provider charges may apply, including in private windows. These preferences apply to future previews until switched off.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
+                }
                 Text("Keys are stored in Keychain. Requests go to your provider and may incur charges.")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Private requests aren’t saved locally. Your provider’s retention policy still applies.")

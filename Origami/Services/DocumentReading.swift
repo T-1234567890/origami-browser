@@ -33,6 +33,18 @@ extension TabPage {
         }
     }
 
+    func discoverFeeds() async {
+        let generation = documentGeneration
+        guard nativePage == nil, !Task.isCancelled else { return }
+        if let mime = responseDetails?.mime.lowercased(), mime.contains("rss") || mime.contains("atom"), let url = currentURL {
+            discoveredFeeds = [url]; return
+        }
+        if let urls = try? await webView.callAsyncJavaScript(FeedDiscovery.script, arguments: [:], in: nil, contentWorld: .defaultClient) as? [String],
+           generation == documentGeneration, !Task.isCancelled {
+            discoveredFeeds = urls.compactMap(URL.init(string:))
+        }
+    }
+
     func discoverDocuments() async {
         let generation = documentGeneration
         guard nativePage == nil, !Task.isCancelled else { return }
@@ -47,10 +59,7 @@ extension TabPage {
             }
             return
         }
-        let discovery = "Array.from(document.querySelectorAll('link[rel~=alternate]')).filter(x=>/application\\/(rss\\+xml|atom\\+xml)/i.test(x.type)).map(x=>x.href).filter(x=>/^https?:/.test(x)).slice(0,10)"
-        if let urls = try? await webView.evaluateJavaScript(discovery) as? [String], generation == documentGeneration, !Task.isCancelled {
-            discoveredFeeds = urls.compactMap(URL.init(string:))
-        }
+        await discoverFeeds()
         guard let scriptURL = Bundle.main.url(forResource: "Readability", withExtension: "js"),
               let script = try? String(contentsOf: scriptURL, encoding: .utf8) else { return }
         let extract = script + """
@@ -89,4 +98,37 @@ extension TabPage {
             if readerWhenReady { readerVisible = true; readerWhenReady = false }
         }
     }
+}
+
+/// Inspect declared feeds and explicit feed links without fetching guessed endpoints.
+enum FeedDiscovery {
+    static let script = #"""
+    const feeds = new Set();
+    const mime = /^(application|text)\/(rss|atom)\+xml(?:\s*;|$)/i;
+    const add = element => {
+      try {
+        const url = new URL(element.getAttribute('href'), document.baseURI);
+        if (!/^https?:$/.test(url.protocol) || url.username || url.password) return;
+        url.hash = '';
+        feeds.add(url.href);
+      } catch (_) {}
+    };
+    for (const link of document.querySelectorAll('link[href]')) {
+      if (mime.test(link.getAttribute('type') || '')) add(link);
+      if (feeds.size >= 10) break;
+    }
+    for (const link of Array.from(document.querySelectorAll('a[href],area[href]')).slice(0, 5000)) {
+      if (feeds.size >= 10) break;
+      try {
+        const url = new URL(link.getAttribute('href'), document.baseURI);
+        const label = [link.textContent, link.getAttribute('title'), link.getAttribute('aria-label'),
+          link.querySelector('img')?.getAttribute('alt')].filter(Boolean).join(' ');
+        const typed = mime.test(link.getAttribute('type') || '');
+        const feedPath = /(?:^|\/)(?:rss|atom|feeds?)(?:\/|\.|$)|\.(?:rss|atom)$/i.test(url.pathname);
+        const labelled = /\b(?:rss|atom)\b/i.test(label);
+        if (typed || feedPath || labelled) add(link);
+      } catch (_) {}
+    }
+    return Array.from(feeds).slice(0, 10);
+    """#
 }

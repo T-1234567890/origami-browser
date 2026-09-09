@@ -167,6 +167,7 @@ extension AIAnswerClient {
 }
 struct NativeAIClient: AIAnswerClient {
     func stream(provider: AIProviderID, input: AIRequest, update: @escaping @MainActor (AIProviderResult) -> Void) async throws -> AIProviderResult {
+        guard AISettings.aiPeekAvailable || (input.action != .peek && input.action != .credibility) else { throw AIError.featureDisabled }
         let network = AINetwork(); defer { network.stop() }
         if provider == .openRouter {
             // Catalog discovery is not a failure of the selected generation model.
@@ -181,6 +182,7 @@ struct NativeAIClient: AIAnswerClient {
         return try await network.stream(request, provider: provider, update: update)
     }
     func answer(provider: AIProviderID, input: AIRequest) async throws -> AIProviderResult {
+        guard AISettings.aiPeekAvailable || (input.action != .peek && input.action != .credibility) else { throw AIError.featureDisabled }
         let network = AINetwork(); defer { network.stop() }
         if provider == .openRouter {
             // Catalog discovery is not a failure of the selected generation model.

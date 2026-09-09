@@ -44,7 +44,6 @@ private struct ModelSearchList: View {
     private func finish() { if let didSelect { didSelect() } else { dismiss() } }
     private var choices: [String] {
         settings.availableModels.filter {
-            (settings.provider != .openRouter || !settings.freeModelsOnly || settings.isFreeModel($0)) &&
             (query.isEmpty || settings.displayName($0).localizedCaseInsensitiveContains(query) || $0.localizedCaseInsensitiveContains(query))
         }
     }
@@ -53,7 +52,6 @@ private struct ModelSearchList: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Search models…", text: $query).textFieldStyle(.roundedBorder)
             if settings.provider == .openRouter {
-                Toggle("Free model tokens", isOn: $settings.freeModelsOnly).toggleStyle(.checkbox).font(.caption)
                 Text("Web search is billed separately, including for free models.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if !error.isEmpty { Text(error).font(.caption).foregroundStyle(.secondary) }

@@ -10,6 +10,19 @@ func answerFixture(_ query: String = "Question", mode: AskMode = .ask, blocks: [
     return String(data: try! JSONSerialization.data(withJSONObject: root), encoding: .utf8)!
 }
 @MainActor struct AnswerProtocolTests {
+    @Test func credibilityNeedsIndependentProviderEvidence() throws {
+        let context = AIPageContext(title: "Page", url: "https://page.example", text: "Excerpt")
+        let input = AIRequest(query: "Evaluate", mode: .research, action: .credibility, contexts: [context], model: "fixture")
+        let text = answerFixture(mode: .research).replacingOccurrences(of: "Summary", with: "Credible. Evidence supports the source.")
+        for sources in [[], [AISource(url: context.url, title: "Page", provenance: "Provider retrieval")], [AISource(url: "https://example.com", title: "Independent source", provenance: "Provider retrieval")]] {
+            var event = AISearchEvent(query: "Evaluate", mode: .research, action: .credibility, provider: .openRouter, model: "fixture")
+            try AnswerProtocol.apply(AIProviderResult(text: text, sources: sources, citations: [], searched: true), to: &event, input: input)
+            #expect(event.credibility == (sources.last?.url == "https://example.com" ? .credible : .unknown))
+            #expect(event.answerV1?.blocks.isEmpty == false)
+        }
+        #expect(input.systemInstruction.contains("Do not give a numerical credibility score"))
+    }
+
     @Test func miniMaxFreeUsesCatalogJSONMode() throws {
         let name = "Origami.protocol.catalog." + UUID().uuidString
         let defaults = UserDefaults(suiteName: name)!

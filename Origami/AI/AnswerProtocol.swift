@@ -86,6 +86,11 @@ enum AnswerProtocol {
         if isFinal && input.action.needsWeb && answer.sources.isEmpty { answer.blocks.insert(.callout(AnswerText(text: "The provider returned no web sources for this answer.", citations: [])), at: 0) }
         if let model = result.answeredModel { event.model = model }
         event.fallbackDisclosure = result.fallbackDisclosure
+        if input.action == .credibility {
+            let hasEvidence = result.sources.contains { AISource.safeURL($0.url) != nil && !input.contexts.map(\.url).contains($0.url) }
+            event.credibility = hasEvidence ? CredibilityState.allCases.first { answer.summary.hasPrefix($0.rawValue) } ?? .unknown : .unknown
+            if event.credibility == .unknown { answer.summary = "Unable to Assess. Insufficient verified evidence to assign a credibility rating." }
+        }
         event.answerV1 = answer; event.generatedVisuals = input.generatedVisuals
         event.providerSources = result.sources; event.citations = result.citations
         event.blocks = []; event.markdown = nil; event.sources = []

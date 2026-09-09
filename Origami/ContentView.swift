@@ -283,14 +283,14 @@ struct ContentView: View {
     private var browserContent: some View {
         BrowsingExperienceView(store: store)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(store.session.split == nil ? Color(nsColor: .textBackgroundColor) : Color.clear)
+            .background(store.session.activeSplit == nil ? Color(nsColor: .textBackgroundColor) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: onboarding ? 0 : BrowserChromeMetrics.contentCornerRadius))
             .overlay(alignment: .topTrailing) {
                 if store.showingFind, let page = store.visiblePage, page.nativePage == nil {
                     PageFindBar(page: page) { store.showingFind = false }.id(page.tabID).padding(12)
                 }
             }
-            .padding(onboarding || (!showsContentFrame && store.session.split == nil) ? 0 : BrowserChromeMetrics.contentFrameWidth)
+            .padding(onboarding || (!showsContentFrame && store.session.activeSplit == nil) ? 0 : BrowserChromeMetrics.contentFrameWidth)
 
     }
 
@@ -316,7 +316,19 @@ struct BrowserContentView: View {
                 } else if page.showsJSON, let json = page.jsonText {
                     JSONReaderView(raw: json, details: page.responseDetails) { page.showsJSON = false }
                 } else {
-                    WebViewContainer(webView: page.webView, dismissDialog: page.dismissDialog, activated: { if store.session.split != nil { store.select(tab.id) } })
+                    WebViewContainer(webView: page.webView, dismissDialog: page.dismissDialog, activated: { if store.session.activeSplit != nil { store.select(tab.id) } })
+                        .overlay(alignment: .topTrailing) {
+                            if page.jsonText != nil && !page.showsJSON {
+                                Button { page.showsJSON = true } label: {
+                                    Label("JSON Reader", systemImage: "curlybraces")
+                                }
+                                .buttonStyle(.bordered).controlSize(.small)
+                                .padding(8)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .padding(12)
+                                .help("Return to formatted JSON without reloading")
+                            }
+                        }
                 }
                 if page.isLoading { PageLoadingIndicator(progress: page.progress).id(tab.id) }
                 if let message = page.errorMessage {

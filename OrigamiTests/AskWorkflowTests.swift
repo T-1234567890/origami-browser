@@ -3,6 +3,52 @@ import Testing
 @testable import Origami
 
 @MainActor struct AskWorkflowTests {
+    @Test func disabledPeekAndCredibilityRejectRequestsBeforeProviderAccess() async {
+        for action in [AIAction.peek, .credibility] {
+            let input = AIRequest(query: "Fixture", mode: .ask, action: action, contexts: [], model: "fixture")
+            do {
+                _ = try await NativeAIClient().answer(provider: .openRouter, input: input)
+                Issue.record("Disabled AI action was allowed")
+            } catch AIError.featureDisabled { } catch { Issue.record("Expected feature gate before provider access") }
+            do {
+                _ = try await NativeAIClient().stream(provider: .openRouter, input: input, update: { _ in Issue.record("Unexpected output") })
+                Issue.record("Disabled AI stream was allowed")
+            } catch AIError.featureDisabled { } catch { Issue.record("Expected feature gate before provider access") }
+        }
+    }
+
+    @Test func aiPeekPreferencesPersistBehindDefaultOffFeatureFlag() throws {
+        let name = "Origami.PeekPreferences." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AISettings(defaults: defaults)
+        #expect(!settings.aiPeekEnabled && !settings.aiPeekSummary && !settings.aiPeekCredibility)
+        settings.aiPeekSummary = true; settings.aiPeekCredibility = true
+        #expect(!settings.aiPeekActive)
+        settings.aiPeekEnabled = true
+        let restored = AISettings(defaults: defaults)
+        #expect(!AISettings.aiPeekAvailable && !restored.aiPeekActive)
+        #expect(restored.aiPeekEnabled && restored.aiPeekSummary && restored.aiPeekCredibility)
+        restored.aiPeekEnabled = false
+        #expect(!restored.aiPeekActive && restored.aiPeekSummary && restored.aiPeekCredibility)
+    }
+
+    @Test func peekAndCredibilityUseConfiguredLightweightModel() throws {
+        let name = "Origami.LightweightRoutingTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AISettings(defaults: defaults)
+        settings.setModel("fixture/default", role: "primary")
+        settings.setModel("fixture/light", role: "lightweight")
+        settings.setModel("fixture/research", role: "research")
+        #expect(settings.routedModel(action: .peek, mode: .ask) == "fixture/light")
+        #expect(settings.routedModel(action: .credibility, mode: .research) == "fixture/light")
+        #expect(AIAction.credibility.needsWeb)
+        #expect(settings.routedModel(action: .web, mode: .research) == "fixture/research")
+        settings.setModel("", role: "lightweight")
+        #expect(settings.routedModel(action: .credibility, mode: .research) == "fixture/default")
+    }
+
     @Test func modelCatalogLookupsReuseSnapshotAndRefreshAfterChanges() throws {
         let name = "Origami.ModelSearchTests." + UUID().uuidString
         let defaults = try #require(ModelSearchDefaults(suiteName: name))
@@ -57,9 +103,8 @@ import Testing
         #expect(settings.isFreeModel("vendor/model:free"))
         #expect(settings.isFreeModel("legacy/catalog:free"))
         #expect(!settings.isFreeModel("openrouter/auto"))
-        settings.setFreeModels(["example/free"]); settings.freeModelsOnly = true
+        settings.setFreeModels(["example/free"])
         let restored = AISettings(defaults: defaults)
-        #expect(restored.freeModelsOnly)
         #expect(restored.freeModels == ["example/free"])
         restored.provider = .gemini
         #expect(restored.freeModels.isEmpty)

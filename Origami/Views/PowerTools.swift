@@ -6,6 +6,7 @@ struct QuickTools: View {
     let store: BrowserStore
     var close: () -> Void
     @State private var scripts = false
+    @State private var credibility = false
     @State private var error: String?
     @State private var output: String?
     private var page: TabPage? { store.visiblePage }
@@ -15,6 +16,13 @@ struct QuickTools: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     section("Page") {
+                        if page?.jsonText != nil {
+                            command(page?.showsJSON == true ? "Show Original Response" : "JSON Reader", "curlybraces") {
+                                page?.readerVisible = false
+                                page?.showsJSON.toggle()
+                                close()
+                            }
+                        }
                         command(page?.readerVisible == true ? "Exit Reader Mode" : "Reader Mode", "doc.text") { page?.readerVisible.toggle(); close() }.disabled(page?.article == nil)
                         command("Find", "magnifyingglass") { close(); store.showingFind = true }
                         command("Print", "printer") { page?.webView.printOperation(with: .shared).run() }
@@ -39,11 +47,19 @@ struct QuickTools: View {
                         ForEach(ScriptRuntime.builtins) { script in command(script.name, "curlybraces") { run(script) }.disabled(page?.nativePage != nil || page == nil) }
                         command("Manage Scripts…", "slider.horizontal.3") { scripts = true }
                     }
-                    section("Citations") { command("Saved References…", "books.vertical") { close(); store.openInternal(.references) } }
+                    section("Citations") {
+                        if AISettings.aiPeekAvailable {
+                        command("Evaluate Credibility", "checkmark.shield") { credibility = true }
+                            .disabled(page?.nativePage != nil || page == nil)
+                        }
+                        command("Saved References…", "books.vertical") { close(); store.openInternal(.references) }
+                    }
                     if let error { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
         }.padding(16).frame(width: 290, height: 480)
+            .task(id: page?.currentURL) { await page?.discoverFeeds() }
+            .sheet(isPresented: $credibility) { AIContextSheet(store: store, action: .credibility) }
             .sheet(isPresented: $scripts) { ScriptManager(store: store) }
             .sheet(isPresented: Binding(get: { output != nil }, set: { if !$0 { output = nil } })) {
                 VStack(alignment: .leading) {

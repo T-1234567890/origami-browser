@@ -11,6 +11,7 @@ enum AnswerSystemPrompt {
         Return only the native block types declared in the output schema. Requested code examples are inert code blocks.
         """
         let schemaText = (try? JSONSerialization.data(withJSONObject: AnswerProtocol.schema(visuals: visuals), options: [.sortedKeys])).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-        return base + "\nACTIVE MODE: \(mode.rawValue). ACTIVE TASK: \(action.rawValue).\n" + visualPolicy + "\nEXACT OUTPUT JSON SCHEMA:\n" + schemaText
+        let assessmentPolicy = action == .credibility ? "Give a concise assessment, at most 150 words, using only the web evidence needed to check this source. Begin the summary with exactly one label: Highly Credible, Credible, Use with Caution, Questionable, Unreliable, or Unable to Assess. Explain the basis using retrieved web evidence and citations. Use Unable to Assess when evidence is insufficient. Do not give a numerical credibility score. Treat this as an assessment of the source, not a verdict on every claim." : ""
+        return assessmentPolicy + "\n" + base + "\nACTIVE MODE: \(mode.rawValue). ACTIVE TASK: \(action.rawValue).\n" + visualPolicy + "\nEXACT OUTPUT JSON SCHEMA:\n" + schemaText
     }
 }

@@ -110,6 +110,21 @@ struct AICredentialStore {
         guard provider == .openRouter, let rows = root?["data"] as? [[String: Any]] else { return }
         storeCatalog(rows)
     }
+    // Internal feature flag; hidden and inactive even if an older build saved enabled preferences.
+    static let aiPeekAvailable = false
+    var aiPeekEnabled: Bool {
+        get { _ = revision; return defaults.bool(forKey: "ai.peek.enabled") }
+        set { defaults.set(newValue, forKey: "ai.peek.enabled"); revision += 1 }
+    }
+    var aiPeekSummary: Bool {
+        get { _ = revision; return defaults.bool(forKey: "ai.peek.summary") }
+        set { defaults.set(newValue, forKey: "ai.peek.summary"); revision += 1 }
+    }
+    var aiPeekCredibility: Bool {
+        get { _ = revision; return defaults.bool(forKey: "ai.peek.credibility") }
+        set { defaults.set(newValue, forKey: "ai.peek.credibility"); revision += 1 }
+    }
+    var aiPeekActive: Bool { Self.aiPeekAvailable && aiPeekEnabled && (aiPeekSummary || aiPeekCredibility) }
     var generatedVisuals: Bool {
         get { _ = revision; return defaults.bool(forKey: "ai.generatedVisuals") }
         set { defaults.set(newValue, forKey: "ai.generatedVisuals"); revision += 1 }
@@ -123,10 +138,6 @@ struct AICredentialStore {
         set { defaults.set(newValue, forKey: "ai.openRouter.searchEngine"); revision += 1 }
     }
     var freeModels: [String] { _ = revision; return defaults.stringArray(forKey: "ai.freeModels." + provider.rawValue) ?? [] }
-    var freeModelsOnly: Bool {
-        get { _ = revision; return defaults.bool(forKey: "ai.freeModelsOnly") }
-        set { defaults.set(newValue, forKey: "ai.freeModelsOnly"); revision += 1 }
-    }
     func setFreeModels(_ values: [String]) { defaults.set(values, forKey: "ai.freeModels." + provider.rawValue); revision += 1 }
     static func isFreeOpenRouterModel(_ row: [String: Any]) -> Bool {
         guard let id = row["id"] as? String, id != "openrouter/auto",

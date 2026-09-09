@@ -17,7 +17,7 @@ enum AIAction: String, Codable, CaseIterable, Identifiable {
     case web = "Ask the Web", page = "Ask This Page", summarize = "Summarize Page", selection = "Ask About Selection", explain = "Explain Selection", compare = "Compare Tabs", peek = "Peek Summary", credibility = "Evaluate Credibility", verify = "Verify with the Web", original = "Find Original Source", primary = "Find Primary Source"
     var id: Self { self }
     var needsWeb: Bool { [.web, .credibility, .verify, .original, .primary].contains(self) }
-    var lightweight: Bool { self == .peek || self == .explain }
+    var lightweight: Bool { self == .peek || self == .explain || self == .credibility }
 }
 enum CredibilityState: String, Codable, CaseIterable {
     case highlyCredible = "Highly Credible", credible = "Credible", caution = "Use with Caution", questionable = "Questionable", unreliable = "Unreliable", unknown = "Unable to Assess"
@@ -114,11 +114,13 @@ struct AIProviderResult {
     var suggestions: String?
 }
 enum AIError: LocalizedError {
+    case featureDisabled
     case unavailable(Int), nonRetryable(Int), noCompatibleFallback
     case credential, model, response, invalidJSON, answerSchema, truncated, http(Int), tooLarge, noSelection, noPage, cancelled
     var requiresSetup: Bool { switch self { case .credential, .model, .http(401), .http(403), .nonRetryable(401), .nonRetryable(403): true; default: false } }
     var errorDescription: String? {
         switch self {
+        case .featureDisabled: "AI Peek and credibility assessment are temporarily disabled."
         case .unavailable: "The selected model is temporarily unavailable. Try again later."
         case .nonRetryable(let status): "Provider request failed (HTTP \(status)). Check your provider settings and request requirements."
         case .noCompatibleFallback: "The selected model is temporarily unavailable. No compatible fallback model is configured."

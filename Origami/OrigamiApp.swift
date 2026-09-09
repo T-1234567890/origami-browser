@@ -133,7 +133,7 @@ private struct BrowserCommands: Commands {
         CommandMenu("Browse") {
             Button("Close Peek") { store?.dismissPeek() }.keyboardShortcut(.escape, modifiers: []).disabled(store?.peekPage == nil)
             Button("Reader Mode") { store?.visiblePage?.readerVisible.toggle() }.disabled(store?.visiblePage?.article == nil)
-            Button("JSON Reader") { store?.visiblePage?.showsJSON = true }.disabled(store?.visiblePage?.jsonText == nil)
+            Button("JSON Reader") { store?.visiblePage?.readerVisible = false; store?.visiblePage?.showsJSON = true }.disabled(store?.visiblePage?.jsonText == nil)
         }
         CommandMenu("Library") {
             Button("References") { browser().openInternal(.references) }

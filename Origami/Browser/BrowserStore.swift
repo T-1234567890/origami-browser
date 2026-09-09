@@ -21,6 +21,8 @@ final class BrowserStore {
     var peekLinkBounds: CGRect?
     var peekViewport = CGSize(width: 1200, height: 900)
     var peekSourceID: UUID?
+    var peekDismissGeneration = UUID()
+    var peekInteracting = false
     var peekPage: TabPage?
     var persistenceError: String?
     var confirmationMessage: String?
@@ -109,7 +111,8 @@ final class BrowserStore {
         page.openPeek = { [weak self] url in self?.openPeek(url) }
         page.linkPeekObserver.changed = { [weak self, weak page] url, point in
             guard let self, let page, page.nativePage == nil, self.session.selectedTabID == page.tabID else { return }
-            guard let url else { if self.peekSourceID == page.tabID { self.dismissPeek() }; return }
+            guard let url else { if self.peekSourceID == page.tabID { self.deferPeekDismissal() }; return }
+            self.peekDismissGeneration = UUID()
             if self.peekPage?.currentURL != url { self.openPeek(url) }
             self.peekLinkBounds = page.linkPeekObserver.linkBounds
             let size = page.webView.bounds.size
@@ -138,7 +141,6 @@ final class BrowserStore {
         return tab.id
     }
     func select(_ id: UUID) {
-        if let split = session.split, id != split.left && id != split.right { session.split = nil }
         if session.tabs.first(where: { $0.id == id })?.isSleeping == true { wake(id) }
         guard session.tabs.contains(where: { $0.id == id }) else { return }
         if let previous = session.selectedTabID { pages[previous]?.activity.lastActive = Date() }
@@ -148,18 +150,24 @@ final class BrowserStore {
         if let groupID = selectedTab?.groupID, let index = session.groups.firstIndex(where: { $0.id == groupID }) {
             session.groups[index].isCollapsed = false
         }
+        if let split = session.activeSplit,
+           let groupID = session.tabs.first(where: { $0.id == split.left })?.groupID,
+           let index = session.groups.firstIndex(where: { $0.id == groupID }) {
+            session.groups[index].isCollapsed = false
+        }
         save()
     }
     func close(_ id: UUID) {
         services?.ai.release(id)
         if session.selectedTabID == id { resolveConfirmation(false) }
         guard let index = session.tabs.firstIndex(where: { $0.id == id }) else { return }
+        let remainingSplitTab = session.activeSplit.map { $0.left == id ? $0.right : $0.left }
         let removed = session.tabs.remove(at: index)
         if !isPrivate && removed.canReopen { recentlyClosed.append((removed, index)) }
         recentlyClosed = Array(recentlyClosed.suffix(20))
         pages.removeValue(forKey: id)?.dispose()
         if session.selectedTabID == id {
-            session.selectedTabID = session.tabs.isEmpty ? nil : session.tabs[min(index, session.tabs.count - 1)].id
+            session.selectedTabID = remainingSplitTab ?? (session.tabs.isEmpty ? nil : session.tabs[min(index, session.tabs.count - 1)].id)
         }
         session.normalize()
         save()

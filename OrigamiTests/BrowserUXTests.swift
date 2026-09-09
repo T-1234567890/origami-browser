@@ -4,6 +4,43 @@ import Testing
 @testable import Origami
 
 @MainActor struct BrowserUXTests {
+    @Test func closingEitherSplitMemberKeepsTheOtherSelected() throws {
+        for closeLeft in [true, false] {
+            let store = BrowserStore()
+            defer { store.pages.values.forEach { $0.dispose() } }
+            let left = try #require(store.session.selectedTabID)
+            let outside = store.newTab(), right = store.newTab()
+            store.select(left); store.splitWith(right)
+            let closing = closeLeft ? left : right, remaining = closeLeft ? right : left
+            store.select(closing)
+            let remainingPage = store.pages[remaining]
+            store.close(closing)
+            #expect(store.session.split == nil)
+            #expect(store.session.selectedTabID == remaining)
+            #expect(Set(store.session.tabs.map(\.id)) == Set([outside, remaining]))
+            #expect(store.pages[remaining] === remainingPage)
+        }
+    }
+
+    @Test func splitTabsShareOneEntryAndDetachWithoutLosingPages() throws {
+        let store = BrowserStore()
+        defer { store.pages.values.forEach { $0.dispose() } }
+        let left = try #require(store.session.selectedTabID)
+        let right = store.newTab(), outside = store.newTab()
+        store.select(left); store.splitWith(right)
+        let leftPage = store.pages[left], rightPage = store.pages[right]
+        #expect(store.session.tabStripItems.map(\.id) == [left, outside])
+        store.select(outside)
+        #expect(store.session.split != nil && store.session.activeSplit == nil)
+        store.select(right)
+        #expect(store.session.activeSplit?.right == right)
+        store.detachSplitTab(right, target: .end)
+        #expect(store.session.split == nil)
+        #expect(store.session.tabStripItems.map(\.id) == [left, outside, right])
+        #expect(store.session.selectedTabID == right)
+        #expect(store.pages[left] === leftPage && store.pages[right] === rightPage)
+    }
+
     @Test func groupPaletteRejectsReservedColorsAndRepairsLegacyGroups() {
         #expect(!TabGroupColor.selectable.contains(.accent))
         #expect(!TabGroupColor.selectable.contains(.blue))

@@ -18,7 +18,7 @@ import WebKit
         }
     }
     func start(_ input: AIRequest, tab: UUID, profile: UUID) {
-        var input = input; input.isPrivate = isPrivate; input.generatedVisuals = AISettings.shared.generatedVisuals
+        var input = input; input.isPrivate = isPrivate; input.generatedVisuals = input.action != .credibility && AISettings.shared.generatedVisuals
         cancel(tab)
         let provider = AISettings.shared.provider
         var event = AISearchEvent(query: input.query, mode: input.mode, action: input.action, provider: provider, model: input.model)

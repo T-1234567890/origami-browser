@@ -19,7 +19,18 @@ extension BrowserStore {
         peekPage = page
         page.load(url)
     }
-    func dismissPeek() { peekPage?.dispose(); peekPage = nil; peekSourceID = nil; peekLinkBounds = nil }
+    func deferPeekDismissal() {
+        let id = peekPage?.tabID
+        let generation = UUID()
+        peekDismissGeneration = generation
+        // Allow the pointer to cross from the source link into the preview controls.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, self.peekPage?.tabID == id, self.peekDismissGeneration == generation, !self.peekInteracting else { return }
+            self.dismissPeek()
+        }
+    }
+    func dismissPeek() { peekDismissGeneration = UUID(); peekInteracting = false; peekPage?.dispose(); peekPage = nil; peekSourceID = nil; peekLinkBounds = nil }
     func promotePeek() {
         guard let page = peekPage else { return }
         peekPage = nil
@@ -47,6 +58,12 @@ extension BrowserStore {
     func swapSplit() {
         guard let split = session.split else { return }
         session.split = BrowserSplit(left: split.right, right: split.left); save()
+    }
+    func detachSplitTab(_ id: UUID, target: TabDropTarget? = nil) {
+        guard let split = session.split, id == split.left || id == split.right else { return }
+        session.split = nil
+        if let target { dropTab(id, target: target) }
+        select(id)
     }
     func endSplit() { session.split = nil; save() }
 }
