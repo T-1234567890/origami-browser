@@ -23,6 +23,29 @@ class DiagnosticTests(unittest.TestCase):
             self.assertIn(value, str(error))
         self.assertNotIn('hidden', str(error))
 
+    def test_short_configured_secrets_are_redacted_without_labels(self):
+        fixtures = {'OPENAI_API_KEY': 'fixture-key-123',
+                    'APP_STORE_CONNECT_KEY_ID': 'fixture-id-456',
+                    'APP_STORE_CONNECT_ISSUER_ID': 'fixture-issuer-789',
+                    'AWS_ACCESS_KEY_ID': 'fixture-access-123'}
+        with patch.dict(os.environ, fixtures):
+            error = api_error(409, 'POST', json.dumps({'errors': [
+                {'detail': 'Provider echoed ' + ' '.join(fixtures.values())}]}))
+        for value in fixtures.values():
+            self.assertNotIn(value, str(error))
+        self.assertIn('HTTP 409', str(error))
+        self.assertIn('[redacted]', str(error))
+
+    def test_summary_redacts_even_unsanitized_release_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'summary.md'
+            with patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(destination), 'GITHUB_TOKEN': 'fixture-summary-secret'}):
+                write_summary(None, 'App Store Connect API', ReleaseError('Provider echoed fixture-summary-secret', status=409))
+            text = destination.read_text()
+            self.assertNotIn('fixture-summary-secret', text)
+            self.assertIn('[redacted]', text)
+            self.assertIn('409', text)
+
     def test_invalid_bodies(self):
         for body in [b'not JSON sensitive', b'\xff', b'[]', b'{"errors":null}', b'{"errors":[1,{"title":{}}]}']:
             self.assertEqual(str(api_error(409, 'POST', body)), 'API POST failed (HTTP 409)')

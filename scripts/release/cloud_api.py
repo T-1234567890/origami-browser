@@ -23,7 +23,7 @@ def safe_diagnostic(value, secrets=()):
         return ''
     # Redact before truncating, including credentials echoed inside otherwise safe fields.
     for secret in (*secrets, *(v for k, v in os.environ.items()
-                              if any(word in k.upper() for word in ('TOKEN', 'SECRET', 'PRIVATE_KEY', 'PASSWORD')))):
+                              if any(word in k.upper() for word in ('TOKEN', 'SECRET', 'PRIVATE_KEY', 'PASSWORD', 'API_KEY', 'ACCESS_KEY', 'KEY_ID', 'ISSUER_ID', 'CREDENTIAL', 'AUTHORIZATION')))):
         if secret:
             value = value.replace(secret, '[redacted]')
     value = re.sub(r'-----BEGIN .*?-----.*?-----END .*?-----', '[redacted]', value, flags=re.S)

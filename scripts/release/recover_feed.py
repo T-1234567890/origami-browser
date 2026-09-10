@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from cloud_api import API, ReleaseError
+from cloud_api import safe_diagnostic, API, ReleaseError
 from cloud_configuration import metadata, public_configuration
 from distribution import command, generate_feed, safe_extract, sparkle_tools, verify_app
 from release import read_feed, publish_feed, required
@@ -65,6 +65,6 @@ if __name__ == '__main__':
     try:
         main()
     except ReleaseError as error:
-        sys.exit(str(error))
+        sys.exit(safe_diagnostic(str(error)))
     except Exception:
         sys.exit('Feed recovery failed; no sensitive diagnostics were printed.')

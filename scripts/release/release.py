@@ -11,7 +11,7 @@ import sys
 import tempfile
 import urllib.request
 from urllib.parse import quote
-from cloud_api import API, NoRedirect, ReleaseError, TeamToken, download, run_cloud
+from cloud_api import safe_diagnostic, API, NoRedirect, ReleaseError, TeamToken, download, run_cloud
 from cloud_configuration import metadata, public_configuration
 from distribution import command, ensure_order, generate_feed, package, parse_feed, sparkle_tools
 from website_release import update_website
@@ -80,7 +80,7 @@ def write_summary(release, stage, error=None, commit='', state=None):
         lines += ['✗ Xcode Cloud build could not be started' if stage == 'App Store Connect API' else '✗ Release did not complete', '', 'Stage: ' + stage]
         if getattr(error, 'status', None):
             lines.append(f'HTTP: {error.status}')
-        lines += ['', '<pre>' + html.escape(str(error)) + '</pre>']
+        lines += ['', '<pre>' + html.escape(safe_diagnostic(str(error))) + '</pre>']
     else:
         beta = release['stage'] == 'beta'
         lines += ['✓ Xcode Cloud completed', '✓ Tests passed', '✓ Developer ID signature verified',
@@ -205,6 +205,6 @@ if __name__ == '__main__':
     try:
         main()
     except ReleaseError as error:
-        sys.exit(str(error))
+        sys.exit(safe_diagnostic(str(error)))
     except Exception:
         sys.exit('Release failed: unexpected provider, artifact or configuration response. No diagnostics containing credentials were printed.')

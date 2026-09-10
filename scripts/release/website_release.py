@@ -5,7 +5,7 @@ import json
 import re
 import sys
 from urllib.parse import quote, unquote, urlsplit
-from cloud_api import API, ReleaseError
+from cloud_api import safe_diagnostic, API, ReleaseError
 from cloud_configuration import metadata
 from distribution import NS, item_build, parse_feed
 
@@ -179,4 +179,7 @@ if __name__ == '__main__':
     try:
         main()
     except ReleaseError as error:
-        sys.exit(str(error))
+        sys.exit(safe_diagnostic(str(error)))
+
+    except Exception:
+        sys.exit("Website update failed: unexpected provider or configuration response.")
