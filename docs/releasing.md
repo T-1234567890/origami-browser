@@ -24,8 +24,6 @@ The app contains `SUFeedURL` and `SUPublicEDKey`, never the private key. Invalid
 
 ## Manual configuration checklist
 
-No credentials have been created, no workflow has been started, and no release has been published by adding this infrastructure.
-
 1. **Apple/Xcode Cloud setup:** connect this repository and Origami's app/product in Xcode Cloud. Create an enabled workflow named **Release**, using the shared **Origami** scheme, current compatible Xcode (26.5 or later), macOS, an **Archive** action with **Release** configuration and direct **Developer ID** distribution, and a **Notarize** post-action. Enable manual builds of tags. Keep tag-change automatic starts off to avoid duplicating the build started by GitHub. Configure cloud-managed signing for the existing bundle identifier and team, and grant the needed Apple account permissions/agreements. The exported artifact must be `STAPLED_NOTARIZED_ARCHIVE`; an unsigned archive, App Store export or ordinary build product is deliberately rejected.
 2. **App Store Connect Team API key:** supply a Team API key whose role can read the selected workflow/artifacts and start builds. Put its key ID, issuer ID and complete PEM private key in the three GitHub secrets below. No personal API key, Apple password, certificate P12 or certificate password is used.
 3. **Sparkle keys:** using the official matching Sparkle distribution, create/export your Ed25519 key on your own secured machine. Put the exported private key contents in the GitHub secret below. Keep an offline backup. Put the public key in both GitHub and the Xcode Cloud workflow environment as described below. The supplied public key is recorded in `Configuration/Updates.xcconfig`; use that same value for `SPARKLE_PUBLIC_ED_KEY` in GitHub and Xcode Cloud. No private signing key is stored in the repository.
@@ -85,7 +83,7 @@ Authentication, Cloud failure/timeout, artifact verification and Sparkle failure
 
 If release publication succeeded but the appcast write failed, run **Recover Published Appcast** with the published tag. It downloads the existing binary/metadata, verifies the checksum and signed app, regenerates the feed with Sparkle, and publishes it without a new Cloud build or replacing binary assets. It refuses backwards/conflicting updates. Do not run a newer release first. If the feed already contains the build, there is nothing to recover; confirm its exact asset URL rather than rerunning a release.
 
-A private repository supports script tests and private pipeline exercises with repository permissions. Ordinary Origami installations cannot anonymously download private assets or this private raw feed. No GitHub authentication is embedded in the app. Even after visibility changes, verify the raw feed and exact ZIP URLs from an unauthenticated client before announcing public updates.
+The Origami repository is public. No GitHub authentication is embedded in the app. Verify the raw feed and exact ZIP URLs from an unauthenticated client before announcing public updates.
 
 ## Key rotation and limitations
 
@@ -104,9 +102,9 @@ GitHub generates release notes from repository history. Job summaries use the fu
 
 ## Website download publication and retry
 
-The app and static website share this repository. `website/release.json` is the canonical public download metadata (`version` without the leading `v`, `channel` as `beta` or `stable`, and `downloadURL`). Both website CTAs fetch it through `website/download.js`. All-null values represent no public release and leave the CTAs disabled. Commit the website, scripts, and workflows to the default branch before releasing.
+The app and static website share this repository. `website/release.json` is the canonical public download metadata (`version` without the leading `v`, `channel` as `beta` or `stable`, and `downloadURL`). Both website CTAs fetch it through `website/download.js`. All-null values leave the CTAs disabled without displaying an availability message. Commit the website, scripts, and workflows to the default branch before releasing.
 
-The final step uses the existing job-scoped `GITHUB_TOKEN` with `contents: write`; no new secret, App Store Connect credential reuse, or Sparkle credential reuse is needed. The repository must be public for anonymous downloads. Branch rules must permit this workflow's one-file Contents API update on the default branch; otherwise the step fails safely. The file SHA protects concurrent metadata edits and unrelated files are preserved.
+The final step uses the existing job-scoped `GITHUB_TOKEN` with `contents: write`; no new secret, App Store Connect credential reuse, or Sparkle credential reuse is needed. The public repository supports anonymous downloads. Branch rules must permit this workflow's one-file Contents API update on the default branch; otherwise the step fails safely. The file SHA protects concurrent metadata edits and unrelated files are preserved.
 
 Selection examines published Origami releases: the newest Stable always wins once one exists, even if the website metadata was empty. Before that, the newest Beta wins. The selected asset must also appear in the live appcast with matching version, channel, size, minimum OS and a Sparkle signature. The requested release is checked too. Filenames and URLs are taken from GitHub's uploaded asset records, matched against the published enclosure; they are not guessed. Existing metadata cannot be downgraded. No separate Beta option is exposed.
 

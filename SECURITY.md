@@ -6,7 +6,7 @@ Origami is currently **Beta / pre-release software**. Security boundaries are st
 
 Please coordinate with the maintainers before publicly disclosing an exploitable vulnerability. Do not put exploit details in public issues, pull requests, discussions, or public attachments.
 
-Use GitHub's **Security → Report a vulnerability** action on [the canonical repository](https://github.com/T-1234567890/origami-browser/security) if GitHub makes that action available to you. Its availability is not currently confirmed for this private repository.
+Use GitHub's **Security → Report a vulnerability** action on [the canonical repository](https://github.com/T-1234567890/origami-browser/security) if GitHub makes that action available to you. Private vulnerability reporting availability depends on the repository settings.
 
 There is no dedicated security email published here. If the private reporting action is unavailable, use an existing private channel to a maintainer. If you have no such channel, open an issue titled **“Private security reporting contact requested”** containing only a request for a private reporting route—no vulnerability details, affected targets, exploit code, or sensitive attachments. Wait for a private channel before sending the report.
 

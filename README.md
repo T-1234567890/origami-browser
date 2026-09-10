@@ -27,14 +27,14 @@ Private Ask the Web answers are not saved in local history. Private Browsing is 
 
 ## Status and requirements
 
-Origami is **Beta / pre-release software**. Expect rough edges and changing behavior; there is no published release download linked here yet.
+Origami is **Beta / pre-release software**. Expect rough edges and changing behavior.
 
 - **macOS 15.4 or later** to run.
 - **Xcode 26.5** is the currently verified build toolchain. Newer macOS visual effects use availability checks.
 
 ## Build from source
 
-Clone the repository (GitHub access is required while it is private):
+Clone the public repository:
 
 ```sh
 git clone https://github.com/T-1234567890/origami-browser.git
