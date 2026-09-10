@@ -10,6 +10,7 @@ from cloud_api import API, ReleaseError
 from cloud_configuration import metadata, public_configuration
 from distribution import command, generate_feed, safe_extract, sparkle_tools, verify_app
 from release import read_feed, publish_feed, required
+from website_release import update_website
 
 
 def main():
@@ -44,7 +45,20 @@ def main():
         archive = archive.rename(updates / archive.name)
         data = generate_feed(archive, old, release, repository, required('SPARKLE_ED_PRIVATE_KEY'), sparkle_tools(work))
         publish_feed(github, repository, data, head, tag)
-    print('Published appcast repaired without rebuilding or replacing the binary.')
+    try:
+        result = update_website(github, repository, tag)
+    except Exception:
+        message = ('Release is published and appcast is repaired, but the website download URL was not updated. '
+                   'Run Update Website Download; do not rebuild or rerun appcast recovery.')
+        if os.environ.get('GITHUB_STEP_SUMMARY'):
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+                output.write('## Appcast recovery\n\nAppcast: updated\n\nWebsite download link: failed\n\n' + message + '\n')
+        raise ReleaseError(message) from None
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+            output.write('## Appcast recovery\n\nAppcast: updated\n\nWebsite download link: ' + result['status'] +
+                         '\n\nDownload: ' + result['metadata']['downloadURL'] + '\n')
+    print('Published appcast repaired and website metadata updated without rebuilding or replacing the binary.')
 
 
 if __name__ == '__main__':

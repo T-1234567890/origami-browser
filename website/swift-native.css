@@ -1,0 +1,125 @@
+/* Reused from Hibiscus/Website/styles.css native Swift bar; original Swift orange palette. */
+.swift-native-section {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: 88px;
+  width: min(1060px, calc(100% - 64px));
+  margin: clamp(58px, 7vw, 92px) auto clamp(10px, 2vw, 24px);
+  padding: 18px clamp(14px, 3vw, 38px);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  isolation: isolate;
+  background: linear-gradient(90deg, #f7c3b7 0%, #f7c3b7 48%, rgba(247, 195, 183, 0.62) 72%, transparent 96%);
+  background-clip: padding-box;
+  color: oklch(18% 0.012 178);
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.swift-native-section::before {
+  content: "";
+  position: absolute;
+  inset: -22px -44px;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, #d96b56 44px, #d96b56 calc(100% - 44px), transparent) left 0 top 22px / 100% 2px no-repeat,
+    linear-gradient(90deg, transparent, #d96b56 44px, #d96b56 calc(100% - 44px), transparent) left 0 bottom 22px / 100% 2px no-repeat,
+    linear-gradient(transparent, #d96b56 22px, #d96b56 calc(100% - 22px), transparent) left 44px top 0 / 2px 100% no-repeat,
+    linear-gradient(transparent, #d96b56 22px, #d96b56 calc(100% - 22px), transparent) right 44px top 0 / 2px 100% no-repeat;
+}
+
+.swift-native-section::after {
+  content: none;
+}
+
+.swift-default-content,
+.swift-hover-content {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  transition: opacity 220ms var(--ease-out-quint), transform 260ms var(--ease-out-quint);
+}
+
+.swift-default-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.swift-default-content span {
+  font-size: clamp(0.88rem, 1.3vw, 1.08rem);
+  line-height: 1.15;
+  text-align: right;
+}
+
+.swift-hover-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.swift-hover-content span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  font-size: clamp(0.88rem, 1.3vw, 1.08rem);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.swift-hover-content span:first-child {
+  padding-left: 0;
+}
+
+.swift-hover-content span + span::before {
+  content: "";
+  width: 1px;
+  height: 24px;
+  margin-right: 12px;
+  background: rgba(183, 72, 51, 0.42);
+}
+
+.swift-hover-content svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #b74833;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.swift-native-section:hover .swift-default-content,
+.swift-native-section:focus-visible .swift-default-content {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.swift-native-section:hover .swift-hover-content,
+.swift-native-section:focus-visible .swift-hover-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.swift-default-content img {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 8px 18px rgba(240, 81, 56, 0.2));
+}
+
+/* Keep the inherited interaction usable on narrow screens and touch devices. */
+@media(max-width:700px){.swift-native-section{width:calc(100% - 24px);padding:20px 14px}.swift-native-section::before{inset:-16px -12px;background:none;border-block:1px solid #d96b56}.swift-hover-content{gap:12px;flex-wrap:wrap}.swift-hover-content span{padding:0;font-size:11px;gap:5px}.swift-hover-content span+span::before{display:none}.swift-hover-content svg{width:15px;height:15px}}
+@media(hover:none){.swift-native-section{gap:20px}.swift-default-content,.swift-hover-content{grid-area:auto;opacity:1;transform:none}.swift-hover-content{flex-wrap:wrap;gap:16px}.swift-hover-content span{padding:0;font-size:12px}.swift-hover-content span+span::before{display:none}.swift-native-section:hover .swift-default-content{opacity:1;transform:none}}

@@ -14,6 +14,7 @@ from urllib.parse import quote
 from cloud_api import API, NoRedirect, ReleaseError, TeamToken, download, run_cloud
 from cloud_configuration import metadata, public_configuration
 from distribution import command, ensure_order, generate_feed, package, parse_feed, sparkle_tools
+from website_release import update_website
 
 FEED_BRANCH = 'appcast'
 FEED_PATH = 'appcast.xml'
@@ -69,7 +70,7 @@ def upload(github, release, path):
         raise ReleaseError('GitHub Release asset upload failed; appcast was not changed') from None
 
 
-def write_summary(release, stage, error=None, commit=''):
+def write_summary(release, stage, error=None, commit='', state=None):
     location = os.environ.get('GITHUB_STEP_SUMMARY')
     if not location:
         return
@@ -87,17 +88,37 @@ def write_summary(release, stage, error=None, commit=''):
                   '✓ GitHub prerelease published' if beta else '✓ GitHub release published', '✓ Appcast updated', '',
                   'Version: ' + title.removeprefix('Origami '), f'Build: {release["buildNumber"]}',
                   'Commit: ' + commit[:12], 'Channel: ' + ('Beta' if beta else 'Stable'), 'Minimum macOS: 15.4']
+    if state:
+        checks = state.get('checks', {})
+        lines += ['', '## Publication status', '']
+        for label in ('Xcode Cloud', 'Tests', 'Developer ID', 'Notarization', 'Sparkle', 'GitHub Release', 'Appcast', 'Website download link'):
+            status = checks.get(label, 'Not completed')
+            lines.append(f'{label}: {status}')
+        if release:
+            lines += ['Release version: ' + release.get('tag', title).removeprefix('v'),
+                      'Release channel: ' + release.get('stage', 'unknown')]
+        if state.get('asset_name'):
+            lines.append('Released ZIP asset: ' + state['asset_name'])
+        if state.get('asset_url'):
+            lines.append('Published release download: ' + state['asset_url'])
+        website = state.get('website')
+        if website:
+            lines += ['Website version: ' + website['metadata']['version'],
+                      'Website channel: ' + website['metadata']['channel'],
+                      'Final website download URL: ' + website['metadata']['downloadURL']]
+        else:
+            lines.append('Final website download URL: not updated / unavailable')
     with open(location, 'a') as output:
         output.write('  \n'.join(lines) + '\n')
 
 
 def main():
-    state = dict(release=None, stage='Configuration')
+    state = dict(release=None, stage='Configuration', checks={})
     try:
         execute(state)
     except Exception as error:
         diagnostic = error if isinstance(error, ReleaseError) else ReleaseError('Unexpected provider, artifact or configuration response')
-        write_summary(state['release'], state['stage'], diagnostic)
+        write_summary(state['release'], state['stage'], diagnostic, state=state)
         raise
 
 
@@ -133,6 +154,7 @@ def execute(state):
     run, artifact = run_cloud(API('https://api.appstoreconnect.apple.com', token), workflow, tag, commit,
                               on_started=lambda: state.update(stage='Xcode Cloud build / artifact discovery'))
     release = metadata(tag, run['attributes']['number'])
+    state.setdefault('checks', {}).update({'Xcode Cloud': '✓ Completed', 'Tests': '✓ Passed (configured Xcode Cloud workflow)'})
     state.update(release=release, stage='Artifact download / verification / Sparkle packaging')
     ensure_order(old, release)
     with tempfile.TemporaryDirectory(prefix='origami-release-') as temporary:
@@ -140,8 +162,10 @@ def execute(state):
         archive = work / 'cloud.zip'
         download(artifact['attributes']['downloadUrl'], archive, artifact['attributes'].get('fileSize'))
         binary = package(archive, work, release, config)
+        state['checks'].update({'Developer ID': '✓ Verified', 'Notarization': '✓ Verified'})
         tools = sparkle_tools(work)
         data = generate_feed(binary, old, release, repo, sparkle_key, tools)
+        state['checks']['Sparkle'] = '✓ Signed and verified'
         checksum = work / 'SHA256SUMS.txt'
         checksum.write_text(hashlib.sha256(binary.read_bytes()).hexdigest() + '  ' + binary.name + '\n')
         # Keep a recovery copy alongside each release; it is not the updater's feed URL.
@@ -151,14 +175,30 @@ def execute(state):
         state['stage'] = 'GitHub release publication'
         draft = github.request(f'/repos/{repo}/releases', 'POST', dict(tag_name=tag, target_commitish=commit,
                  name=release['displayVersion'], draft=True, prerelease=release['stage'] == 'beta', generate_release_notes=True))
+        uploaded_binary = None
         for asset in (binary, checksum, recovery, provenance):
-            upload(github, draft, asset)
+            uploaded = upload(github, draft, asset)
+            if asset == binary:
+                uploaded_binary = uploaded
+                state.update(asset_name=uploaded['name'], asset_url=uploaded['browser_download_url'])
         github.request(f'/repos/{repo}/releases/{draft["id"]}', 'PATCH', dict(draft=False, make_latest='false' if release['stage'] != 'stable' else 'true'))
+        state['checks']['GitHub Release'] = '✓ Prerelease published' if release['stage'] == 'beta' else '✓ Published'
         # Never expose an appcast entry until all binary assets are published successfully.
         state['stage'] = 'Appcast publication (binary already published)'
         publish_feed(github, repo, data, head, tag)
-    write_summary(release, 'Complete', commit=commit)
-    print('Release and appcast published successfully.')
+        state['checks']['Appcast'] = '✓ Updated'
+        # Website publication is last. Failure must never roll back the release/feed.
+        state['stage'] = 'Website metadata publication (release and appcast already published)'
+        try:
+            state['website'] = update_website(github, repo, tag, uploaded_binary)
+            state['checks']['Website download link'] = '✓ ' + state['website']['status']
+        except Exception:
+            state['checks']['Website download link'] = '✗ Not updated'
+            raise ReleaseError('Release is published and appcast is updated, but the website download URL was not updated. '
+                               'Do not rerun the release build or roll back publication. Run Update Website Download for this tag; '
+                               'check public repository visibility and default-branch write access.') from None
+    write_summary(release, 'Complete', commit=commit, state=state)
+    print('Release, appcast and website download metadata published successfully.')
 
 
 if __name__ == '__main__':

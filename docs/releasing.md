@@ -73,6 +73,8 @@ The release job:
 7. Creates a draft release with commit-generated notes. Uploads ZIP, `SHA256SUMS.txt`, recovery `appcast.xml`, and non-sensitive `release.json` (identity/commit/Cloud run ID). Only then publishes the normal release or prerelease with its display title.
 8. Publishes `appcast.xml` to the dedicated `appcast` branch using the Git data API. It is a feed-only branch. Existing feed heads are checked, and writes cannot force-push. Release assets always use exact tag URLs; the updater never uses `/releases/latest/download/appcast.xml`.
 
+9. Updates `website/release.json` on the repository default branch LAST, after both release and appcast publication succeed. It uses the actual uploaded GitHub ZIP asset response, rechecks publication and the live appcast, and never commits a temporary Cloud URL.
+
 The only write permission is `contents: write` on release/recovery jobs. Checkout actions are commit-pinned. ASC temporary key files are owner-only and removed with their temporary directory; Sparkle keys use stdin. Tool diagnostics are captured rather than exposing response bodies, temporary download URLs or secrets. Runner-local artifacts and caches disappear with the ephemeral hosted runner. No secret, build archive or raw API dump is a repository output.
 
 ## Release procedure and failure recovery
@@ -97,4 +99,21 @@ References: [Sparkle sandbox integration](https://sparkle-project.org/documentat
 
 Before starting Xcode Cloud, the runner reports the requested tag and commit, workflow enabled state, repository, and resolved tag reference. It checks manual tag conditions when the API exposes them. Apple JSON:API failures report only bounded, sanitized status, code, title, detail, and source pointer fields; non-JSON bodies are omitted. A rejected or ambiguous build-start POST is never automatically retried. Inspect the reported condition and the Cloud workflow before rerunning.
 
-GitHub generates release notes from repository history. Job summaries use the full marketing version and report success only after binary publication and the final appcast update. A startup failure instead identifies the App Store Connect stage and safe Apple diagnostics. The tests status in a successful summary reflects the configured Xcode Cloud workflow, which must run its tests before succeeding.
+GitHub generates release notes from repository history. Job summaries use the full marketing version and report success only after binary publication and the appcast and final website metadata update. A startup failure instead identifies the App Store Connect stage and safe Apple diagnostics. The tests status in a successful summary reflects the configured Xcode Cloud workflow, which must run its tests before succeeding.
+
+
+## Website download publication and retry
+
+The app and static website share this repository. `website/release.json` is the canonical public download metadata (`version` without the leading `v`, `channel` as `beta` or `stable`, and `downloadURL`). Both website CTAs fetch it through `website/download.js`. All-null values represent no public release and leave the CTAs disabled. Commit the website, scripts, and workflows to the default branch before releasing.
+
+The final step uses the existing job-scoped `GITHUB_TOKEN` with `contents: write`; no new secret, App Store Connect credential reuse, or Sparkle credential reuse is needed. The repository must be public for anonymous downloads. Branch rules must permit this workflow's one-file Contents API update on the default branch; otherwise the step fails safely. The file SHA protects concurrent metadata edits and unrelated files are preserved.
+
+Selection examines published Origami releases: the newest Stable always wins once one exists, even if the website metadata was empty. Before that, the newest Beta wins. The selected asset must also appear in the live appcast with matching version, channel, size, minimum OS and a Sparkle signature. The requested release is checked too. Filenames and URLs are taken from GitHub's uploaded asset records, matched against the published enclosure; they are not guessed. Existing metadata cannot be downgraded. No separate Beta option is exposed.
+
+If the GitHub Release and appcast succeed but the website step fails, **leave both published**. Run **Update Website Download** (`update-website-download.yml`) from the default branch with the already-published tag. It uses only `GITHUB_TOKEN`, reads release/appcast state, and updates only this metadata file. It neither builds nor signs, creates/releases assets, nor edits the appcast. Repeating it with current metadata makes no commit; an ambiguous successful write is likewise safe to retry. An older tag retry still selects the newest eligible public download. All publication/recovery workflows share the existing concurrency group.
+
+For an appcast failure, use **Recover Published Appcast** first; it now also updates the website after repairing the feed. If that final update fails, use only the website recovery workflow next.
+
+The release summary records version/channel, Xcode Cloud, configured workflow tests, Developer ID, notarization, Sparkle, GitHub publication, actual ZIP name, appcast status, website update status and final website URL. A Beta run may report a different Stable URL as the website default. Failure summaries distinguish already-published release/appcast state from an unsuccessful website update.
+
+No hosting service is connected and no deployment platform or workflow is added. This integration commits the metadata file only; it does not deploy a hosted website. Validate locally with the release infrastructure unit tests and `node --test website/tests/download.test.cjs`. Live publication, repository permissions and anonymous download availability must be verified during the first real release.

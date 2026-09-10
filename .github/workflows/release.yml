@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Build in Xcode Cloud, verify, package and publish
+      - name: Build, verify, publish release and appcast, then update website last
         env:
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
           GITHUB_TOKEN: ${{ github.token }}

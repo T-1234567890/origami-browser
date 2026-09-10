@@ -190,7 +190,7 @@ class ReleaseTests(unittest.TestCase):
                 generate_feed(archive, None, release, 'test/repo', 'synthetic-key-input', Path('/fixture-tools'))
 
     def test_publication_order_and_upload_failure(self):
-        for tag, fail_upload in [("v1.0.0", False), ("v1.0.0-beta.1", False), ("v1.0.0", True), ("v1.0.0-beta.1", True)]:
+        for tag, failure in [("v1.0.0", None), ("v1.0.0-beta.1", None), ("v1.0.0", "upload"), ("v1.0.0-beta.1", "upload"), ("v1.0.0", "feed"), ("v1.0.0", "website")]:
             events = []
             environment = dict(RELEASE_TAG=tag, GITHUB_REPOSITORY='test/repo', GITHUB_TOKEN='synthetic-token', SPARKLE_FEED_URL='https://raw.githubusercontent.com/test/repo/appcast/appcast.xml', SPARKLE_PUBLIC_ED_KEY=base64.b64encode(bytes(32)).decode(), APPLE_TEAM_ID='0000000000', BUNDLE_IDENTIFIER='org.example.fixture', XCODE_CLOUD_WORKFLOW_ID='fixture', SPARKLE_ED_PRIVATE_KEY='synthetic-key-input', APP_STORE_CONNECT_KEY_ID='fixture', APP_STORE_CONNECT_ISSUER_ID='fixture', APP_STORE_CONNECT_PRIVATE_KEY='synthetic-key-input')
             api = Mock()
@@ -210,18 +210,34 @@ class ReleaseTests(unittest.TestCase):
                 archive = work / release['assetName']; archive.write_bytes(b'fixture'); return archive
             def fake_upload(*args):
                 events.append('upload')
-                if fail_upload: raise ReleaseError('upload failed')
+                if failure == 'upload': raise ReleaseError('upload failed')
+                return dict(id=1, name=args[2].name, browser_download_url='https://github.com/test/repo/releases/download/' + tag + '/' + args[2].name, size=7)
+            def publish(*args):
+                events.append('feed')
+                if failure == 'feed': raise ReleaseError('feed failed')
+            def website(*args):
+                events.append('website')
+                self.assertEqual(args[3]['id'], 1)
+                if failure == 'website': raise ReleaseError('website failed')
+                return dict(status='updated', metadata=dict(version=tag[1:], channel=self.version(tag)['stage'], downloadURL=args[3]['browser_download_url']))
             from contextlib import ExitStack
             with ExitStack() as stack:
                 stack.enter_context(patch.dict(os.environ, environment, clear=True))
-                for target, value in [('metadata', self.version), ('API', Mock(return_value=api)), ('read_feed', Mock(return_value=(None, None))), ('command', Mock(return_value=b'fixture-commit')), ('run_cloud', Mock(return_value=({'id':'run', 'attributes':{'number':101}}, {'attributes':{'downloadUrl':'https://example.org/artifact'}}))), ('download', Mock()), ('package', fake_package), ('sparkle_tools', Mock()), ('generate_feed', Mock(return_value=b'<rss/>')), ('upload', fake_upload), ('publish_feed', lambda *args: events.append('feed'))]:
+                for target, value in [('metadata', self.version), ('API', Mock(return_value=api)), ('read_feed', Mock(return_value=(None, None))), ('command', Mock(return_value=b'fixture-commit')), ('run_cloud', Mock(return_value=({'id':'run', 'attributes':{'number':101}}, {'attributes':{'downloadUrl':'https://example.org/artifact'}}))), ('download', Mock()), ('package', fake_package), ('sparkle_tools', Mock()), ('generate_feed', Mock(return_value=b'<rss/>')), ('upload', fake_upload), ('publish_feed', publish), ('update_website', website)]:
                     stack.enter_context(patch('release.' + target, value))
-                if fail_upload:
-                    with self.assertRaises(ReleaseError): main()
-                    self.assertNotIn('publish', events); self.assertNotIn('feed', events)
+                if failure:
+                    with self.assertRaises(ReleaseError) as error: main()
+                    if failure == 'upload':
+                        self.assertNotIn('publish', events); self.assertNotIn('feed', events)
+                    elif failure == 'feed':
+                        self.assertNotIn('website', events)
+                    else:
+                        self.assertIn('Release is published and appcast is updated', str(error.exception))
+                        self.assertEqual(events[-3:], ['publish', 'feed', 'website'])
+                    self.assertFalse(any(call.args[1:2] == ('DELETE',) for call in api.request.call_args_list))
                 else:
                     main()
-                    self.assertEqual(events, ['draft', 'upload', 'upload', 'upload', 'upload', 'publish', 'feed'])
+                    self.assertEqual(events, ['draft', 'upload', 'upload', 'upload', 'upload', 'publish', 'feed', 'website'])
 
     def test_cloud_configuration_is_public_and_numeric(self):
         import cloud_configuration

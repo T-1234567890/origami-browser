@@ -1,0 +1,27 @@
+name: Update Website Download
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Already-published tag present in the live appcast (website-only retry)
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  update:
+    concurrency:
+      group: origami-release-publication
+      cancel-in-progress: false
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Update website metadata from published release and appcast
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/website_release.py

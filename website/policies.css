@@ -1,0 +1,39 @@
+/* Origami's document layout. Policy topics reference the Hibiscus documents;
+   this presentation is independent and uses Origami's shared site tokens. */
+.policy-page { padding-block: clamp(64px, 9vw, 128px) 120px; }
+.policy-intro { max-width: 960px; padding-bottom: 48px; }
+.policy-intro h1 {
+  margin: 0 0 28px;
+  font-size: clamp(3rem, 7vw, 6rem);
+  font-weight: 650;
+  line-height: 1.04;
+  letter-spacing: -.065em;
+  text-wrap: balance;
+}
+.policy-description { max-width: 38ch; margin: 0; color: var(--ink-muted); font-size: clamp(1.2rem, 2.3vw, 1.65rem); line-height: 1.5; }
+.policy-details { display: flex; flex-wrap: wrap; gap: 16px 40px; margin-top: 32px; font-size: 14px; }
+.policy-details time { color: var(--ink-muted); }
+.policy-details a, .policy-text a { color: var(--mint-deep); }
+.policy-details a:hover, .policy-text a:hover { color: var(--ink); }
+.policy-layout { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2.7fr); gap: clamp(40px, 7vw, 100px); border-top: 1px solid var(--line); padding-top: 48px; }
+.policy-contents { position: sticky; top: 32px; align-self: start; }
+.policy-contents ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
+.policy-contents a { display: inline-block; font-size: 14px; line-height: 1.45; color: var(--ink-muted); }
+.policy-contents a:hover { color: var(--mint-deep); }
+.policy-text { max-width: 720px; min-width: 0; }
+.policy-text section { scroll-margin-top: 40px; }
+.policy-text section + section { margin-top: 42px; padding-top: 36px; border-top: 1px solid var(--line); }
+.policy-text h2 { margin: 0 0 18px; font-size: clamp(1.4rem, 2vw, 1.75rem); font-weight: 600; letter-spacing: -.035em; line-height: 1.25; }
+.policy-text p { margin: 0 0 16px; font-size: 17px; line-height: 1.8; color: var(--ink-muted); overflow-wrap: anywhere; }
+.policy-text p:last-child { margin-bottom: 0; }
+@media (max-width: 760px) {
+  .policy-page { padding-block: 52px 80px; }
+  .policy-intro { padding-bottom: 32px; }
+  .policy-layout { grid-template-columns: 1fr; gap: 36px; padding-top: 28px; }
+  .policy-contents { position: static; }
+  .policy-contents ol { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; }
+  .policy-text p { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .policy-body { scroll-behavior: auto; }
+}

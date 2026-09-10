@@ -12,3 +12,10 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m unittest discover -s scripts/release/tests -v
+      - name: Check static website download integration
+        run: |
+          node --check website/download.js
+          node --check website/latest-version.js
+          node --check website/main.js
+          node --check website/privacy-field.js
+          node --test website/tests/*.test.cjs

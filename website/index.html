@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f8f9f6">
+<title>Origami Browser — Built for Mac. Ready for the AI era.</title>
+<meta name="description" content="A native, open-source WebKit browser for macOS. Ask the Web, Peek and Split View, flexible tabs, Reader, JSON tools, and RSS. Built primarily with Swift.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Origami Browser">
+<meta property="og:description" content="The best ideas in browsing, brought together for Mac.">
+<meta property="og:image" content="assets/origami-icon.png">
+<meta property="og:image:alt" content="Origami Browser mint app icon">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="assets/origami-icon.png">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="swift-native.css">
+<script src="site-config.js" defer>
+</script>
+<script src="download.js" defer></script>
+<script src="latest-version.js" defer></script>
+<script src="main.js" defer>
+</script>
+<script src="privacy-field.js" defer></script>
+<noscript>
+<style>.video-shell video{display:none}</style>
+</noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header wrap">
+<a class="brand" href="./">
+<img src="assets/origami-icon.png" width="28" height="28" alt="">Origami</a>
+<nav aria-label="Main">
+<a href="#ask">Explore</a>
+<a href="https://github.com/T-1234567890/origami-browser"><span>GitHub</span></a>
+</nav>
+</header>
+<main id="main">
+<section class="hero wrap">
+<img class="hero-icon" src="assets/origami-icon.png" width="176" height="176" alt="Origami app icon" fetchpriority="high">
+<h1>Origami Browser</h1>
+<p class="hero-statement">A native, <mark><em>open-source</em></mark> browser for Mac, <br>built for the <mark><em>AI era.</em></mark>
+</p>
+<div class="actions">
+<a class="button primary" data-download aria-disabled="true" tabindex="-1">Download for Mac <span aria-hidden="true">↓</span>
+</a>
+<a class="button secondary" href="https://github.com/T-1234567890/origami-browser"><svg class="github-icon" viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span>GitHub</span></a>
+</div>
+<p class="availability">macOS 15.4 or later <span>·</span> Licensed under MPL 2.0</p>
+<a class="hero-next" href="#introduction" aria-label="Meet Origami">Meet your next browser <span aria-hidden="true">↓</span>
+</a>
+</section>
+<section id="introduction" class="introduction wrap">
+<h2>The best ideas in browsing, <br>
+<span>brought together for Mac.</span>
+</h2>
+</section>
+<section id="meet-origami" class="meet-screen wrap" aria-labelledby="meet-title">
+<h2 id="meet-title" class="meet-origami">Meet <span class="meet-brand"><img src="assets/origami-icon.png" width="96" height="96" alt="" loading="lazy">Origami<span class="mint-dot">.</span></span>
+</h2>
+</section>
+<div class="scroll-stack" aria-label="Explore Origami features">
+<section id="ask" style="--stack-index: 0" class="chapter" aria-labelledby="ask-title">
+<div class="chapter-inner">
+<header class="chapter-copy">
+<h2 id="ask-title">Ask the Web.</h2>
+<p class="subtitle">Search when you want links.<br>Ask when you want answers.</p>
+</header>
+<figure class="demo">
+<div class="video-shell">
+<video width="1920" height="1080" muted playsinline loop preload="none" autoplay disablepictureinpicture disableremoteplayback tabindex="-1" data-src="assets/videos/ask-the-web.mp4" data-poster="assets/posters/ask-the-web.jpg" aria-label="Ask the Web. demonstration">
+</video>
+<noscript>
+<img src="assets/posters/ask-the-web.jpg" width="1920" height="1080" alt="Origami feature demonstration preview" loading="lazy">
+</noscript>
+<p class="video-error" hidden>Demo unavailable.</p>
+</div>
+<figcaption>
+<span class="demo-label">Ask the Web. — in Origami</span>
+<p class="fine-print">AI features require your own API key from a supported provider.<br>Generation time has been shortened for this demo.</p>
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="peek" style="--stack-index: 1" class="chapter" aria-labelledby="peek-title">
+<div class="chapter-inner">
+<header class="chapter-copy">
+<h2 id="peek-title">More context. Less switching.</h2>
+<p class="subtitle">Preview links with Peek and keep important pages side by side.</p>
+</header>
+<figure class="demo">
+<div class="video-shell">
+<video width="1920" height="1080" muted playsinline loop preload="none" autoplay disablepictureinpicture disableremoteplayback tabindex="-1" data-src="assets/videos/peek-split-view.mp4" data-poster="assets/posters/peek-split-view.jpg" aria-label="More context. Less switching. demonstration">
+</video>
+<noscript>
+<img src="assets/posters/peek-split-view.jpg" width="1920" height="1080" alt="Origami feature demonstration preview" loading="lazy">
+</noscript>
+<p class="video-error" hidden>Demo unavailable.</p>
+</div>
+<figcaption>
+<span class="demo-label">More context. Less switching. — in Origami</span>
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="tabs" style="--stack-index: 2" class="chapter" aria-labelledby="tabs-title">
+<div class="chapter-inner">
+<header class="chapter-copy">
+<h2 id="tabs-title">Tabs, your way.</h2>
+<p class="subtitle">Horizontal or vertical.<br>Your tabs stay yours.</p>
+</header>
+<figure class="demo">
+<div class="video-shell">
+<video width="1920" height="1080" muted playsinline loop preload="none" autoplay disablepictureinpicture disableremoteplayback tabindex="-1" data-src="assets/videos/2-tab-modes.mp4" data-poster="assets/posters/2-tab-modes.jpg" aria-label="Tabs, your way. demonstration">
+</video>
+<noscript>
+<img src="assets/posters/2-tab-modes.jpg" width="1920" height="1080" alt="Origami feature demonstration preview" loading="lazy">
+</noscript>
+<p class="video-error" hidden>Demo unavailable.</p>
+</div>
+<figcaption>
+<span class="demo-label">Tabs, your way. — in Origami</span>
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="reader" style="--stack-index: 3" class="chapter" aria-labelledby="reader-title">
+<div class="chapter-inner">
+<header class="chapter-copy">
+<h2 id="reader-title">Read, without the clutter.</h2>
+<p class="subtitle">A cleaner view when the page matters more than the page around it.</p>
+</header>
+<figure class="demo">
+<div class="video-shell">
+<video width="1920" height="1080" muted playsinline loop preload="none" autoplay disablepictureinpicture disableremoteplayback tabindex="-1" data-src="assets/videos/reader-mode.mp4" data-poster="assets/posters/reader-mode.jpg" aria-label="Read, without the clutter. demonstration">
+</video>
+<noscript>
+<img src="assets/posters/reader-mode.jpg" width="1920" height="1080" alt="Origami feature demonstration preview" loading="lazy">
+</noscript>
+<p class="video-error" hidden>Demo unavailable.</p>
+</div>
+<figcaption>
+<span class="demo-label">Read, without the clutter. — in Origami</span>
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="json" style="--stack-index: 4" class="chapter" aria-labelledby="json-title">
+<div class="chapter-inner">
+<header class="chapter-copy">
+<h2 id="json-title">JSON, made readable.</h2>
+<p class="subtitle">Format, navigate, and inspect structured JSON with less clutter.</p>
+</header>
+<figure class="demo">
+<div class="video-shell">
+<video width="1920" height="1080" muted playsinline loop preload="none" autoplay disablepictureinpicture disableremoteplayback tabindex="-1" data-src="assets/videos/json.mp4" data-poster="assets/posters/json.jpg" aria-label="JSON, made readable. demonstration">
+</video>
+<noscript>
+<img src="assets/posters/json.jpg" width="1920" height="1080" alt="Origami feature demonstration preview" loading="lazy">
+</noscript>
+<p class="video-error" hidden>Demo unavailable.</p>
+</div>
+<figcaption>
+<span class="demo-label">JSON, made readable. — in Origami</span>
+<p class="fine-print">Origami improves the presentation of JSON; basic familiarity with JSON is still recommended.<br>Loading time has been shortened for this demo.</p>
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="rss" style="--stack-index: 5" class="chapter" aria-labelledby="rss-title">
+<div class="chapter-inner">
+<header class="chapter-copy">
+<h2 id="rss-title">RSS, built in.</h2>
+<p class="subtitle">Follow the web without another app.</p>
+</header>
+<figure class="demo">
+<div class="video-shell">
+<video width="1920" height="1080" muted playsinline loop preload="none" autoplay disablepictureinpicture disableremoteplayback tabindex="-1" data-src="assets/videos/rss.mp4" data-poster="assets/posters/rss.jpg" aria-label="RSS, built in. demonstration">
+</video>
+<noscript>
+<img src="assets/posters/rss.jpg" width="1920" height="1080" alt="Origami feature demonstration preview" loading="lazy">
+</noscript>
+<p class="video-error" hidden>Demo unavailable.</p>
+</div>
+<figcaption>
+<span class="demo-label">RSS, built in. — in Origami</span>
+</figcaption>
+</figure>
+</div>
+</section>
+</div>
+<section class="fundamentals wrap">
+<h2>Of course, all the<br>fundamentals are here.</h2>
+<p class="subtitle">The everyday things you expect from a browser — navigation, bookmarks, history, downloads, private browsing, and more. They’re fundamentals, so we won’t introduce each one individually.</p>
+<ul class="feature-grid">
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/></svg>
+<h3>Profiles</h3>
+<p>A space for each part of your day.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="m8 3 8 0-1 6 4 4H5l4-4-1-6Zm4 10v8"/></svg>
+<h3>Pinned Tabs</h3>
+<p>Keep your regulars close.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><rect x="3" y="9" width="18" height="12" rx="2"/><path d="M3 13h18M7 9V5h13a2 2 0 0 1 2 2M10 5V2h9"/></svg>
+<h3>Tab Groups</h3>
+<p>Bring related pages together.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg>
+<h3>Private Browsing</h3>
+<p>A separate, temporary session.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="m9 5 10 7-10 7V5ZM4 5v14"/></svg>
+<h3>Media Controls</h3>
+<p>Keep playback within reach.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>
+<h3>Downloads</h3>
+<p>Your files, easy to find.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="M4 9a9 9 0 1 1 0 6M3 3v6h6m3-3v6l4 2"/></svg>
+<h3>History</h3>
+<p>Find your way back.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4V3Z"/></svg>
+<h3>Bookmarks</h3>
+<p>Save something worth returning to.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5"/><path d="m12 12 4 4M17 5h4m-4 4h4M3 18h7m-7 4h13"/></svg>
+<h3>Search Suggestions</h3>
+<p>A head start on your next search.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="M5 3v5m0 4v9M12 3v10m0 4v4M19 3v2m0 4v12"/><rect x="2.5" y="8" width="5" height="4" rx="1"/><rect x="9.5" y="13" width="5" height="4" rx="1"/><rect x="16.5" y="5" width="5" height="4" rx="1"/></svg>
+<h3>Personalization</h3>
+<p>Make your browser feel like you.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="M9 9V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V9Z"/></svg>
+<h3>Keyboard Shortcuts</h3>
+<p>Keep your hands on the keys.</p>
+</li>
+<li>
+<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-14-2 16"/></svg>
+<h3>Web Inspector</h3>
+<p>Inspect pages through Safari.</p>
+</li>
+</ul>
+</section>
+<section class="native wrap">
+<h2>Built for Mac.</h2>
+<p class="subtitle">Origami is a native Mac browser,<br>built primarily with Swift, SwiftUI, and WebKit.</p>      <section class="swift-native-section" aria-label="Built natively with Swift: battery efficient, lightning fast, and native throughout" tabindex="0">
+        <div class="swift-default-content">
+          <img src="assets/icons/swift-logo-color.svg" alt="" width="46" height="46" loading="lazy" decoding="async">
+          <span>Built natively with Swift</span>
+        </div>
+        <div class="swift-hover-content" aria-hidden="true">
+          <span>
+<svg viewBox="0 0 24 24">
+<rect x="2" y="7" width="16" height="10" rx="2">
+</rect>
+<path d="M22 11v2">
+</path>
+<path d="M6 11v2">
+</path>
+</svg>Battery Efficient</span>
+          <span>
+<svg viewBox="0 0 24 24">
+<path d="m13 2-9 12h8l-1 8 9-12h-8z">
+</path>
+</svg>Lightning Fast</span>
+          <span>
+<svg viewBox="0 0 24 24">
+<path d="m18 16 4-4-4-4">
+</path>
+<path d="m6 8-4 4 4 4">
+</path>
+<path d="m14.5 4-5 16">
+</path>
+</svg>Native Throughout</span>
+        </div>
+      </section>
+<ul class="stack" aria-label="Technologies">
+<li>Swift</li>
+<li>SwiftUI</li>
+<li>WebKit</li>
+<li>GRDB</li>
+<li>Sparkle</li>
+<li>Readability</li>
+</ul>
+<p class="fine-print">Origami is built primarily with Swift and native Apple frameworks. Some bundled third-party components use other technologies.</p>
+<p class="fine-print">Origami is an independent project and is not affiliated with, endorsed by, or sponsored by Apple Inc.</p>
+</section>
+<section id="open-and-private" class="privacy-field" aria-labelledby="privacy-field-title">
+<div class="privacy-field-stage">
+<canvas class="privacy-field-canvas" aria-hidden="true"></canvas>
+<div class="privacy-field-content">
+<h2 id="privacy-field-title"><span class="field-line" style="--line:0">Built in the open.</span><span class="field-line accent" style="--line:1">Private by design.</span></h2>
+<p><span class="field-line" style="--line:2">No first-party telemetry.</span><span class="field-line" style="--line:3">AI is optional and uses your own API key.</span><span class="field-line" style="--line:4">Origami is open source.</span><span class="field-line" style="--line:5">Official builds are signed and notarized.</span></p>
+</div>
+</div>
+</section>
+<section class="final-cta wrap" id="download">
+<img src="assets/origami-icon.png" width="88" height="88" alt="" loading="lazy">
+<p class="latest-version" data-latest-version aria-hidden="true"></p>
+<h2>Browse with Origami.</h2>
+<div class="actions">
+<a class="button primary" data-download aria-disabled="true" tabindex="-1">Download for Mac <span aria-hidden="true">↓</span>
+</a>
+<a class="button secondary" href="https://github.com/T-1234567890/origami-browser"><svg class="github-icon" viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span>View on GitHub</span></a>
+</div>
+<p class="availability">macOS 15.4 or later <span>·</span> Licensed under MPL 2.0</p>
+</section>
+</main>
+<footer class="site-footer wrap">
+<div class="footer-top">
+<a class="brand" href="./">Origami Browser</a>
+<nav aria-label="Footer">
+<a href="https://github.com/T-1234567890/origami-browser"><span>GitHub</span></a>
+<a href="privacy/">Privacy Policy</a>
+<a href="terms/">Terms</a>
+<a href="license/">License</a>
+<a href="notices/">Third-Party Notices</a>
+</nav>
+</div>
+<div class="footer-bottom">
+<a href="https://1234567890.dev/">A project by 1234567890.dev ↗</a>
+<p>Origami is an independent open-source project and is not affiliated with or endorsed by Apple Inc.<br>Apple, Mac, and macOS are trademarks of Apple Inc.<br>Third-party names and trademarks belong to their respective owners.</p>
+</div>
+</footer>
+</body>
+</html>
