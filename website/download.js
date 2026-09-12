@@ -24,6 +24,7 @@
       }
       buttons.forEach(button => {
         button.href = release.downloadURL;
+        button.innerHTML = 'Download for Mac <span aria-hidden="true">↓</span>';
         button.removeAttribute('aria-disabled');
         button.removeAttribute('tabindex');
       });
