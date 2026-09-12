@@ -58,6 +58,8 @@ Build output in `build/` is ignored by Git. See [CONTRIBUTING.md](CONTRIBUTING.m
 
 Bug reports, focused pull requests, and feature discussions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
+See the [roadmap](roadmap.md) for planned areas of development.
+
 For suspected vulnerabilities, follow [SECURITY.md](SECURITY.md). Do not post exploitable vulnerability details in public issues.
 
 ## License
