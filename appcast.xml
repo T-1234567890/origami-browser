@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Origami</title>
+        <item>
+            <title>1.0.1</title>
+            <pubDate>Thu, 17 Sep 2026 02:07:22 +0000</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/T-1234567890/origami-browser/releases/download/v1.0.1-beta.4/Origami-1.0.1-beta.4.zip" length="9517246" type="application/octet-stream" sparkle:edSignature="lj/5xSIguCGxlDbq+OrUDGMzOZ3nEPIWYS/oDU/FhX0MtmyphdlhMtLeN/YSt948ekn/Br6AughxMx4jSzbkDA=="/>
+        </item>
+    </channel>
+</rss>
