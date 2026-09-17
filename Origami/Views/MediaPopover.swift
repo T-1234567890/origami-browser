@@ -20,7 +20,7 @@ struct MediaPopover: View {
             }.padding(14)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
-        .frame(width: 300)
+        .frame(width: 360)
         .frame(height: min(340, contentHeight))
     }
 }
@@ -28,6 +28,10 @@ struct MediaPopover: View {
 private struct MediaSessionControls: View {
     let page: TabPage
     @State private var artwork: NSImage?
+    @State private var loadedURL: URL?
+    @State private var failedURL: URL?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var displayScale
     @State private var seekPosition = 0.0
     @State private var seeking = false
     @State private var seekSessionID: String?
@@ -44,14 +48,7 @@ private struct MediaSessionControls: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                if let artwork {
-                    Image(nsImage: artwork).resizable().scaledToFill().frame(width: 56, height: 56)
-                        .clipShape(RoundedRectangle(cornerRadius: 6)).accessibilityHidden(true)
-                } else if let favicon = page.favicon {
-                    Image(nsImage: favicon).resizable().scaledToFit().frame(width: 28, height: 28).accessibilityHidden(true)
-                } else {
-                    Image(systemName: "music.note").font(.system(size: 24)).foregroundStyle(.tertiary).accessibilityHidden(true)
-                }
+                artworkView
                 VStack(alignment: .leading, spacing: 4) {
                     Text(state.title.flatMap { $0.isEmpty ? nil : $0 } ?? page.webView.title ?? "Media")
                         .font(.system(size: 13, weight: .medium)).lineLimit(2)
@@ -67,11 +64,40 @@ private struct MediaSessionControls: View {
             if actionFailed { Text("Use the player on the website for this action.").font(.caption).foregroundStyle(.secondary) }
         }
         .task(id: state.artworkURL) {
-            artwork = nil
+            artwork = nil; loadedURL = nil; failedURL = nil
             guard let url = state.artworkURL else { return }
-            let image = await FaviconService.fetch(url, maximumPixelSize: 160)
-            if !Task.isCancelled { artwork = image }
+            let image = await page.mediaArtwork.load(url)
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                artwork = image; loadedURL = url
+                if image == nil { failedURL = url }
+            }
         }
+    }
+    private var artworkView: some View {
+        let url = state.artworkURL
+        let image = url.flatMap { page.mediaArtwork.cached($0) } ?? (loadedURL == url ? artwork : nil)
+        let phase = MediaImagePresentation.phase(hasArtworkURL: url != nil, hasImage: image != nil, failed: url != nil && failedURL == url)
+        return ZStack {
+            RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.3))
+            if phase == .artwork, let image {
+                let size = MediaImagePresentation.fitted(image.size)
+                Image(nsImage: image).resizable().scaledToFit()
+                    .frame(width: size.width, height: size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .id(url).transition(.opacity)
+            } else if phase == .loading || (page.favicon == nil && page.faviconLoading) {
+                ProgressView().controlSize(.small).transition(.opacity)
+            } else if let favicon = page.favicon {
+                let size = MediaImagePresentation.faviconSize(favicon, scale: displayScale)
+                Image(nsImage: favicon).resizable().scaledToFit()
+                    .frame(width: size.width, height: size.height).transition(.opacity)
+            } else {
+                Image(systemName: "music.note").font(.system(size: 24)).foregroundStyle(.tertiary)
+            }
+        }.frame(width: 112, height: 64).accessibilityHidden(true)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: phase)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: page.faviconLoading)
     }
     @ViewBuilder private var progress: some View {
         if state.isLive {

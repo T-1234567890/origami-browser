@@ -18,6 +18,7 @@ final class BrowserServices {
     let websiteData: WebsiteDataService
     let isPrivate: Bool
     let media = MediaStateService()
+    let mediaArtwork = MediaArtworkService()
     let favicons = FaviconService()
     let lifecycle = TabLifecycleService()
     init(database: DatabaseManager, preferences: BrowserPreferences? = nil, privateProfile: BrowserProfile? = nil,

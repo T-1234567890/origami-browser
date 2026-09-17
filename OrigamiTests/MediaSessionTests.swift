@@ -145,6 +145,23 @@ struct MediaSessionTests {
         #expect(page.nativePage == .history && page.mediaPlaybackSuspended)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func artworkPrefersUsefulSizeOverFirstOrLargest() async throws {
+        let page = makePage()
+        defer { page.dispose() }
+        try await ready(page)
+        _ = try await page.webView.callAsyncJavaScript(Self.startMedia, arguments: [:], in: nil, contentWorld: .page)
+        _ = try await page.webView.evaluateJavaScript("""
+            navigator.mediaSession.metadata = new MediaMetadata({artwork:[
+              {src:'https://example.com/tiny.png',sizes:'32x32'},
+              {src:'https://example.com/huge.png',sizes:'4096x4096'},
+              {src:'https://example.com/good.png',sizes:'320x180'}
+            ]}); true
+            """)
+        let state = await MediaStateService().sample(page.webView)
+        #expect(state.artworkURL?.lastPathComponent == "good.png")
+    }
+
     private func makePage() -> TabPage {
         let configuration = WKWebViewConfiguration()
         configuration.mediaTypesRequiringUserActionForPlayback = []

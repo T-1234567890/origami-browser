@@ -36,6 +36,9 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     @ObservationIgnored private var mediaTask: Task<Void, Never>?
     @ObservationIgnored private let mediaObserver = MediaFrameObserver()
     var mediaState = TabMediaState()
+    var mediaArtwork: MediaArtworkService { services?.mediaArtwork ?? standaloneArtwork }
+    @ObservationIgnored private let standaloneArtwork = MediaArtworkService()
+    var faviconLoading = false
     private(set) var mediaPlaybackSuspended = false
     var activity = TabActivity()
     var isLoading = false
@@ -122,6 +125,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func refreshMediaState() {
         var next = nativePage == nil ? mediaObserver.current : TabMediaState()
         next.hasCapture = webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none
+        if next.isRelevant, next.artworkURL != mediaState.artworkURL, let url = next.artworkURL { services?.mediaArtwork.prefetch(url) }
         if next != mediaState { mediaState = next }
         if activity.isPlayingMedia != next.isPlayingMedia { activity.isPlayingMedia = next.isPlayingMedia }
         if activity.hasCapture != next.hasCapture { activity.hasCapture = next.hasCapture }
@@ -179,7 +183,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         let entry = destinationHistory.visit(url)
         requestedURL = url
         if InternalRoute.page(for: url) != nil {
-            pendingEntry = nil; faviconTask?.cancel(); webView.stopLoading(); favicon = nil; update()
+            pendingEntry = nil; faviconTask?.cancel(); faviconLoading = false; webView.stopLoading(); favicon = nil; update()
         } else {
             pendingEntry = entry.id; webView.load(URLRequest(url: url)); update()
         }
@@ -220,7 +224,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         documentTask?.cancel()
         dismissDialog()
         mediaTask?.cancel()
-        faviconTask?.cancel()
+        faviconTask?.cancel(); faviconLoading = false
         observations.removeAll()
         mediaObserver.changed = nil
         mediaObserver.reset()
@@ -234,7 +238,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         resetDocuments()
-        errorMessage = nil; favicon = nil; faviconTask?.cancel(); update()
+        errorMessage = nil; favicon = nil; faviconTask?.cancel(); faviconLoading = false; update()
     }
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         documentGeneration = UUID(); documentTask?.cancel()
@@ -397,8 +401,10 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
     private func loadFavicon() {
         guard let pageURL = webView.url, ["https", "http"].contains(pageURL.scheme) else { return }
+        faviconLoading = true
         faviconTask = Task { [weak self] in
             guard let self else { return }
+            defer { if webView.url == pageURL { faviconLoading = false } }
             let declared = try? await webView.evaluateJavaScript("document.querySelector('link[rel~=icon]')?.href") as? String
             let url = declared.flatMap(URL.init(string:)) ?? URL(string: "/favicon.ico", relativeTo: pageURL)?.absoluteURL
             guard let url, ["https", "http"].contains(url.scheme) else { return }

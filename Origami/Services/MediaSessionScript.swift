@@ -39,6 +39,20 @@ enum MediaSessionScript {
           };
         } catch (_) { /* Unsupported action interception leaves Previous/Next unavailable. */ }
       }
+      function artworkURL(items) {
+        const choices = [...(items || [])].slice(0,32).flatMap(item => {
+          let url; try { url = new URL(item.src, document.baseURI); } catch (_) { return []; }
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return [];
+          const sizes = String(item.sizes || '').split(/\s+/).map(size => /^(\d+)x(\d+)$/.exec(size))
+            .filter(Boolean).map(size => Math.max(Number(size[1]), Number(size[2]))).filter(size => size > 0);
+          const suitable = sizes.filter(size => size <= 2048);
+          if (sizes.length && !suitable.length) return [];
+          const size = suitable.sort((a,b) => Math.abs(a-320)-Math.abs(b-320))[0];
+          const score = size ? (size >= 224 ? Math.abs(size-320) : 1000-size) : 900;
+          return [{url:url.href, score}];
+        });
+        return choices.sort((a,b)=>a.score-b.score)[0]?.url || '';
+      }
       function snapshot() {
         const element = candidates()[0];
         if (!element) return null;
@@ -47,7 +61,7 @@ enum MediaSessionScript {
         const currentTime = Number.isFinite(element.currentTime) && element.currentTime >= 0 ? element.currentTime : null;
         const seekable = element.seekable;
         const canSeek = duration !== null && seekable.length === 1 && seekable.start(0) <= 0.1 && seekable.end(0) >= duration - 0.5;
-        const artwork = metadata?.artwork?.find(item => /^https?:/.test(item.src))?.src || (element.poster || '');
+        const artwork = artworkURL(metadata?.artwork) || (element.poster || '');
         return {id: state.id, phase: element.paused ? 'paused' : 'playing', live: element.duration === Infinity,
           title: String(metadata?.title || document.title || '').slice(0,512), source: location.hostname,
           artwork: String(artwork).slice(0,4096), currentTime, duration, canSeek,
