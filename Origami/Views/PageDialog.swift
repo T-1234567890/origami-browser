@@ -26,11 +26,12 @@ final class PageDialog: NSObject, NSPopoverDelegate {
         cancel()
         guard view.window != nil else { completion(nil); return }
         self.completion = completion; popover.behavior = .transient; popover.delegate = self
+        let resolveChoice: (String) -> Void = { [weak self] in self?.resolve($0) }
         popover.contentViewController = NSHostingController(rootView: VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.headline)
             PopoverMessage(message: message)
             ForEach(["Open Once", "Always Open", "Stay in Browser", "Block"], id: \.self) { choice in
-                Button(choice) { [weak self] in self?.resolve(choice) }
+                Button(choice) { resolveChoice(choice) }
             }
         }.padding(20).frame(width: 300))
         popover.show(relativeTo: NSRect(x: view.bounds.midX, y: view.isFlipped ? view.bounds.minY : view.bounds.maxY, width: 1, height: 1), of: view, preferredEdge: view.isFlipped ? .maxY : .minY)

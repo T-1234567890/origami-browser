@@ -149,6 +149,13 @@ class ReleaseTests(unittest.TestCase):
             with patch('distribution.command', return_value=plistlib.dumps({})) as run:
                 verify_app(app, release, config)
                 self.assertEqual([call.args[0][0] for call in run.call_args_list], ['codesign', 'spctl', 'xcrun', 'codesign'])
+                signature = run.call_args_list[0].args[0]
+                requirement = signature[signature.index('--test-requirement') + 1]
+                self.assertTrue(requirement.startswith('=anchor apple generic'))
+                self.assertIn('certificate leaf[subject.OU] = "0000000000"', requirement)
+                self.assertIn('certificate leaf[field.1.2.840.113635.100.6.1.13] exists', requirement)
+                self.assertIn('--deep', signature)
+                self.assertIn('--strict', signature)
             with patch('distribution.command', side_effect=ReleaseError('signature failed')):
                 with self.assertRaises(ReleaseError): verify_app(app, release, config)
             info['OrigamiReleaseStage'] = 'beta'; (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))

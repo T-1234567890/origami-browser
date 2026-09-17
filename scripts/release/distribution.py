@@ -64,7 +64,8 @@ def verify_app(app, release, config):
         raise ReleaseError('Signed app identity or updater configuration does not match the release')
     if info.get('LSMinimumSystemVersion') != '15.4':
         raise ReleaseError('Unexpected minimum macOS version')
-    requirement = 'anchor apple generic and certificate leaf[subject.OU] = "' + config['team'] + '" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
+    # codesign requires '=' for inline source; without it this is treated as a filename.
+    requirement = '=anchor apple generic and certificate leaf[subject.OU] = "' + config['team'] + '" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
     command(['codesign', '--verify', '--deep', '--strict', '--test-requirement', requirement, app])
     command(['spctl', '--assess', '--type', 'execute', app])
     command(['xcrun', 'stapler', 'validate', app])

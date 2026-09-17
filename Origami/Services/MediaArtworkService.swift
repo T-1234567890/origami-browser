@@ -91,7 +91,7 @@ enum MediaImagePresentation {
         return CGSize(width: size.width * scale, height: size.height * scale)
     }
     static func faviconSize(_ image: NSImage, scale: CGFloat) -> CGSize {
-        let vector = image.representations.contains { $0 is NSPDFImageRep || $0 is NSEPSImageRep }
+        let vector = image.representations.contains { $0 is NSPDFImageRep }
         let pixels = image.representations.map { CGSize(width: $0.pixelsWide, height: $0.pixelsHigh) }
             .max { $0.width < $1.width } ?? image.size
         let limit: CGFloat = vector ? 32 : min(28, max(12, max(pixels.width, pixels.height) / max(1, scale)))

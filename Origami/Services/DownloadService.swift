@@ -72,9 +72,7 @@ final class DownloadService: NSObject, WKDownloadDelegate {
                 let reserved = Set(transfers.values.compactMap { $0.record.destination })
                 let url = Self.availableDestination(directory: directory, filename: transfer.record.filename, reserved: reserved)
                 transfer.record.destination = url.path; transfer.record.state = .running
-                transfer.observation = download.progress.observe(\.completedUnitCount, options: [.new]) { [weak self, weak download] _, _ in
-                    Task { @MainActor [weak self, weak download] in if let download { self?.updateProgress(download) } }
-                }
+                transfer.observation = observeProgress(download)
                 transfers[ObjectIdentifier(download)] = transfer; persist(transfer.record); completionHandler(url); return
             } catch { onError?("Choose a download folder again to allow access.") }
         }
@@ -93,12 +91,17 @@ final class DownloadService: NSObject, WKDownloadDelegate {
             transfer.record.destination = url.path
             transfer.record.bookmark = try? url.bookmarkData(options: .withSecurityScope)
             transfer.record.state = .running
-            transfer.observation = download.progress.observe(\.completedUnitCount, options: [.new]) { [weak self, weak download] _, _ in
-                Task { @MainActor [weak self, weak download] in if let download { self?.updateProgress(download) } }
-            }
+            transfer.observation = observeProgress(download)
             self.transfers[ObjectIdentifier(download)] = transfer
             self.persist(transfer.record)
             completionHandler(url)
+        }
+    }
+    private func observeProgress(_ download: WKDownload) -> NSKeyValueObservation {
+        download.progress.observe(\.completedUnitCount, options: [.new]) { [weak self, weak download] _, _ in
+            Task { @MainActor [weak self, weak download] in
+                if let download { self?.updateProgress(download) }
+            }
         }
     }
     private func updateProgress(_ download: WKDownload) {
