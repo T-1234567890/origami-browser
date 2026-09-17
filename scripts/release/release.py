@@ -85,7 +85,7 @@ def write_summary(release, stage, error=None, commit='', state=None):
         beta = release['stage'] == 'beta'
         lines += ['✓ Xcode Cloud completed', '✓ Tests passed', '✓ Developer ID signature verified',
                   '✓ Apple notarization verified', '✓ Sparkle update signed',
-                  '✓ GitHub prerelease published' if beta else '✓ GitHub release published', '✓ Appcast updated', '',
+                  '✓ GitHub release published', '✓ Appcast updated', '',
                   'Version: ' + title.removeprefix('Origami '), f'Build: {release["buildNumber"]}',
                   'Commit: ' + commit[:12], 'Channel: ' + ('Beta' if beta else 'Stable'), 'Minimum macOS: 15.4']
     if state:
@@ -174,7 +174,7 @@ def execute(state):
         provenance.write_text(json.dumps(dict(release=release, commit=commit, cloudBuild=run['id']), indent=2) + '\n')
         state['stage'] = 'GitHub release publication'
         draft = github.request(f'/repos/{repo}/releases', 'POST', dict(tag_name=tag, target_commitish=commit,
-                 name=release['displayVersion'], draft=True, prerelease=release['stage'] == 'beta', generate_release_notes=True))
+                 name=release['displayVersion'], draft=True, prerelease=False, generate_release_notes=True))
         uploaded_binary = None
         for asset in (binary, checksum, recovery, provenance):
             uploaded = upload(github, draft, asset)
@@ -182,7 +182,7 @@ def execute(state):
                 uploaded_binary = uploaded
                 state.update(asset_name=uploaded['name'], asset_url=uploaded['browser_download_url'])
         github.request(f'/repos/{repo}/releases/{draft["id"]}', 'PATCH', dict(draft=False, make_latest='false' if release['stage'] != 'stable' else 'true'))
-        state['checks']['GitHub Release'] = '✓ Prerelease published' if release['stage'] == 'beta' else '✓ Published'
+        state['checks']['GitHub Release'] = '✓ Published'
         # Never expose an appcast entry until all binary assets are published successfully.
         state['stage'] = 'Appcast publication (binary already published)'
         publish_feed(github, repo, data, head, tag)
@@ -192,11 +192,12 @@ def execute(state):
         try:
             state['website'] = update_website(github, repo, tag, uploaded_binary)
             state['checks']['Website download link'] = '✓ ' + state['website']['status']
-        except Exception:
+        except Exception as error:
+            reason = safe_diagnostic(str(error)) if isinstance(error, ReleaseError) else 'Unexpected website metadata response'
             state['checks']['Website download link'] = '✗ Not updated'
             raise ReleaseError('Release is published and appcast is updated, but the website download URL was not updated. '
                                'Do not rerun the release build or roll back publication. Run Update Website Download for this tag; '
-                               'check public repository visibility and default-branch write access.') from None
+                               'check public repository visibility and default-branch write access. ' + reason) from None
     write_summary(release, 'Complete', commit=commit, state=state)
     print('Release, appcast and website download metadata published successfully.')
 

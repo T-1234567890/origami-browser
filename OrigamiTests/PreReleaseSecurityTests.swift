@@ -98,20 +98,25 @@ import Testing
         defer { coordinator.dispose() }
         try await wait { height > 0 || coordinator.failed }
         #expect(!coordinator.failed)
-        weak var discarded = host.web
+        let discarded = WeakVisualWebView(host.web)
         // Bounded pathological fixture bypasses admission intentionally to test
         // the renderer watchdog. It stops after 3 seconds even on test failure.
-        host.web?.evaluateJavaScript("const end = Date.now()+3000; while(Date.now()<end) {}") { _, _ in }
+        startBoundedExecution(on: host.web)
         try await wait { coordinator.failed }
         #expect(height == 0 && coordinator.web == nil && host.web == nil && host.subviews.isEmpty)
         #expect(coordinator.timer == nil && coordinator.pending == nil)
-        try await wait { discarded == nil }
+        try await wait { discarded.value == nil }
         var nextHeight: CGFloat = 0
         let next = VisualWebHost.Coordinator(height: Binding(get: { nextHeight }, set: { nextHeight = $0 }))
         let nextHost = VisualWebHost.Host(); install(nextHost, next)
         defer { next.dispose() }
         try await wait { nextHeight > 0 || next.failed }
         #expect(nextHeight == 80 && !next.failed)
+    }
+    // Intentionally use the callback API: awaiting evaluation would retain the web
+    // view during execution and prevent observing watchdog disposal concurrently.
+    private func startBoundedExecution(on webView: WKWebView?) {
+        webView?.evaluateJavaScript("const end = Date.now()+3000; while(Date.now()<end) {}") { _, _ in }
     }
     private func install(_ host: VisualWebHost.Host, _ coordinator: VisualWebHost.Coordinator) {
         host.web = WKWebView(frame: CGRect(x: 0, y: 0, width: 600, height: 480), configuration: VisualPolicy.configuration())
@@ -129,4 +134,10 @@ private struct SecurityAnswerFixture: AIAnswerClient {
     func answer(provider: AIProviderID, input: AIRequest) async throws -> AIProviderResult {
         AIProviderResult(text: answerFixture(input.query), sources: [], citations: [], searched: true)
     }
+}
+
+@MainActor
+private final class WeakVisualWebView {
+    weak var value: WKWebView?
+    init(_ value: WKWebView?) { self.value = value }
 }

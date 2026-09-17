@@ -6,6 +6,8 @@ Origami uses Sparkle 2.9.6 for direct macOS updates. Xcode Cloud owns Developer 
 
 Stable tags use `vMAJOR.MINOR.PATCH`. Beta tags use `vMAJOR.MINOR.PATCH-beta.N`, where `N` is a positive integer. Version components are nonnegative integers without leading zeroes. Zero beta numbers, metadata suffixes, whitespace, and other release stages are rejected.
 
+Both Stable and Beta tags publish as normal GitHub releases. Beta builds retain their Beta title and Sparkle channel; only Stable releases are explicitly marked Latest.
+
 Marketing versions remain `MAJOR.MINOR.PATCH`; beta identity is stored separately. The app displays `Origami MAJOR.MINOR.PATCH` with `Beta N` appended for beta builds. The full numeric marketing version is always displayed.
 
 `Origami/Updates/ReleaseIdentity.swift` is the single parser. The app uses it to validate bundle metadata; `scripts/release/VersionTool.swift` compiles with that same source for automation. No second tag parser exists in the workflows.
@@ -68,7 +70,7 @@ The release job:
 4. Rejects unsafe archive paths/symlinks and unreasonable sizes. Verifies the app's bundle identity, updater configuration, build number, Developer ID certificate/team, Gatekeeper assessment and stapled notarization ticket. Debuggable distribution builds are rejected.
 5. Packages `Origami-<version-and-stage>.zip` with `ditto`, preserving symlinks and signing metadata. The app bundle is never changed after signing. A second extraction verifies packaging did not invalidate the app.
 6. Downloads checksum-pinned official Sparkle tooling. `generate_appcast` signs via stdin, checks the key against the app's public key, retains old entries, disables deltas and assigns `beta` only to prereleases. The resulting signature, enclosure URL, length, channel and minimum OS are validated. No key appears in a command argument, repository file or printed tool output.
-7. Creates a draft release with commit-generated notes. Uploads ZIP, `SHA256SUMS.txt`, recovery `appcast.xml`, and non-sensitive `release.json` (identity/commit/Cloud run ID). Only then publishes the normal release or prerelease with its display title.
+7. Creates a draft release with commit-generated notes. Uploads ZIP, `SHA256SUMS.txt`, recovery `appcast.xml`, and non-sensitive `release.json` (identity/commit/Cloud run ID). Only then publishes a normal GitHub release with its display title for both Stable and Beta tags.
 8. Publishes `appcast.xml` to the dedicated `appcast` branch using the Git data API. It is a feed-only branch. Existing feed heads are checked, and writes cannot force-push. Release assets always use exact tag URLs; the updater never uses `/releases/latest/download/appcast.xml`.
 
 9. Updates `website/release.json` on the repository default branch LAST, after both release and appcast publication succeed. It uses the actual uploaded GitHub ZIP asset response, rechecks publication and the live appcast, and never commits a temporary Cloud URL.

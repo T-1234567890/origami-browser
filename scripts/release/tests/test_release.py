@@ -205,7 +205,7 @@ class ReleaseTests(unittest.TestCase):
                 if method == 'GET': return None
                 if method == 'POST':
                     self.assertTrue(body['generate_release_notes'])
-                    self.assertEqual(body['prerelease'], '-beta.' in tag)
+                    self.assertFalse(body['prerelease'])
                     self.assertEqual(body['name'], self.version(tag)['displayVersion'])
                 else:
                     self.assertFalse(body['draft'])

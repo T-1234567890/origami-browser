@@ -34,8 +34,8 @@ def public_asset(github, repo, published, items, uploaded=None):
     if published.get('draft') is not False or not published.get('published_at'):
         raise ReleaseError('Website download requires a published GitHub Release')
     identity = metadata(tag, 1)
-    if published.get('prerelease') is not (identity['stage'] == 'beta'):
-        raise ReleaseError('GitHub prerelease flag does not match the release channel')
+    if published.get('prerelease') is not False:
+        raise ReleaseError('Website download requires a normal GitHub release')
     prefix = f'https://github.com/{repo}/releases/download/{tag}/'
     matches = []
     for item in items:
@@ -71,8 +71,10 @@ def public_asset(github, repo, published, items, uploaded=None):
             or '/' in asset['name'] or '\\' in asset['name']
             or any(c in url + asset['name'] for c in '\r\n\t<>`')):
         raise ReleaseError('Published ZIP asset is incomplete or inconsistent with the live appcast')
+    # Draft asset URLs may change on publication. Match immutable upload identity;
+    # the live URL was already checked against the published appcast above.
     if uploaded is not None and any(asset.get(key) != uploaded.get(key)
-                                    for key in ('id', 'name', 'browser_download_url', 'size')):
+                                    for key in ('id', 'name', 'size')):
         raise ReleaseError('Published ZIP differs from the actual uploaded release asset')
     return identity, asset
 
@@ -156,9 +158,11 @@ def main():
     try:
         result = update_website(API('https://api.github.com', lambda: required('GITHUB_TOKEN')),
                                 required('GITHUB_REPOSITORY'), tag)
-    except Exception:
+    except Exception as error:
+        reason = safe_diagnostic(str(error)) if isinstance(error, ReleaseError) else "Unexpected website metadata response"
         message = ('Website download metadata was not updated. Existing GitHub Releases and appcasts were not changed. '
-                   'Verify public release/appcast availability and default-branch write access, then retry this website-only workflow.')
+                   'Verify public release/appcast availability and default-branch write access, then retry this website-only workflow. '
+                   + reason)
         if os.environ.get('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
                 output.write('## Website download recovery\n\n' + message + '\n')

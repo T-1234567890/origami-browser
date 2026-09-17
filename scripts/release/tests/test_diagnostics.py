@@ -117,7 +117,7 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertIn('# ' + title, text)
                 self.assertIn('Tests passed', text)
                 self.assertIn('Build: 123', text)
-                self.assertIn('GitHub prerelease published' if stage == 'beta' else 'GitHub release published', text)
+                self.assertIn('GitHub release published', text)
                 path.unlink()
                 write_summary(identity, 'App Store Connect API', api_error(409, 'POST', b'{"errors":[{"title":"Conflict"}]}'))
                 text = path.read_text()

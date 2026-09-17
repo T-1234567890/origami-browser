@@ -34,7 +34,7 @@ class GitHub:
         self.fail_write = False
         for number, identity in enumerate(identities, 1):
             tag = identity['tag']
-            self.releases.append(dict(id=number, tag_name=tag, draft=False, published_at='2026-09-10', prerelease=identity['stage'] == 'beta'))
+            self.releases.append(dict(id=number, tag_name=tag, draft=False, published_at='2026-09-10', prerelease=False))
             name = f'Actual-upload-{number}.zip'  # Deliberately not a filename template.
             url = f'https://github.com/{REPO}/releases/download/{tag}/{name}'
             self.assets[number] = [dict(id=number, name=name, browser_download_url=url, state='uploaded', size=42)]
@@ -86,6 +86,24 @@ class WebsiteReleaseTests(unittest.TestCase):
         self.assertEqual(result['metadata'], dict(version='1.0.0-beta.1', channel='beta', downloadURL=api.assets[1][0]['browser_download_url']))
         self.assertEqual(update_website(api, REPO, 'v1.0.0-beta.1')['status'], 'already current')
         self.assertEqual(len(self.writes(api)), 1)
+
+    def test_draft_asset_url_can_change_after_publication(self):
+        api = self.api('v1.0.0-beta.1')
+        uploaded = dict(api.assets[1][0], browser_download_url='https://github.com/test/repo/releases/download/untagged-draft/asset.zip')
+        result = update_website(api, REPO, 'v1.0.0-beta.1', uploaded)
+        self.assertEqual(result['metadata']['downloadURL'], api.assets[1][0]['browser_download_url'])
+        self.assertEqual(len(self.writes(api)), 1)
+
+    def test_recovery_reports_sanitized_failure_reason(self):
+        import os
+        from website_release import main
+        with patch.dict(os.environ, {'RELEASE_TAG': 'v1.0.0-beta.1', 'GITHUB_REPOSITORY': REPO,
+                                     'GITHUB_TOKEN': 'synthetic-sensitive-token', 'GITHUB_STEP_SUMMARY': ''}), \
+             patch('website_release.update_website', side_effect=ReleaseError('API PUT failed (HTTP 403) synthetic-sensitive-token')):
+            with self.assertRaises(ReleaseError) as caught:
+                main()
+        self.assertIn('HTTP 403', str(caught.exception))
+        self.assertNotIn('synthetic-sensitive-token', str(caught.exception))
 
     def test_latest_beta_selected_even_on_older_retry(self):
         api = self.api('v1.0.0-beta.2', 'v1.0.0-beta.10')
