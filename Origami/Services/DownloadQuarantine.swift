@@ -26,23 +26,8 @@ struct DownloadQuarantine {
         guard file.isFileURL else { throw Failure.invalidDestination }
         let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
         guard let type = attributes[.type] as? FileAttributeType, type == .typeRegular || type == .typeDirectory else { throw Failure.invalidDestination }
-        var properties = try self.properties(at: file)
-        // Preserve existing quarantine properties; never clear flags or grant user approval.
-        properties[kLSQuarantineTypeKey as String] = kLSQuarantineTypeWebDownload as String
-        if properties[kLSQuarantineAgentNameKey as String] == nil { properties[kLSQuarantineAgentNameKey as String] = "Origami" }
-        if properties[kLSQuarantineAgentBundleIdentifierKey as String] == nil {
-            properties[kLSQuarantineAgentBundleIdentifierKey as String] = Bundle.main.bundleIdentifier ?? "dev.1234567890.Origami"
-        }
-        if properties[kLSQuarantineTimeStampKey as String] == nil { properties[kLSQuarantineTimeStampKey as String] = Date() }
-        for key in [kLSQuarantineDataURLKey as String, kLSQuarantineOriginURLKey as String] {
-            let old = (properties[key] as? URL) ?? (properties[key] as? String).flatMap(URL.init(string:))
-            if let old { properties[key] = metadataURL(old) }
-        }
+        let properties = preparedProperties(existing: try self.properties(at: file), downloadURL: downloadURL, originURL: originURL)
         let dataURL = metadataURL(downloadURL)
-        if let dataURL { properties[kLSQuarantineDataURLKey as String] = dataURL }
-        if let origin = metadataURL(originURL), origin != dataURL {
-            properties[kLSQuarantineOriginURLKey as String] = origin
-        }
         try (file as NSURL).setResourceValue(properties, forKey: .quarantinePropertiesKey)
         // A fresh URL avoids validating Foundation's cached resource values after the write.
         let verified = try self.properties(at: file)
@@ -52,6 +37,28 @@ struct DownloadQuarantine {
         guard try !attribute("com.apple.quarantine", at: file).isEmpty,
               !(verified[kLSQuarantineAgentNameKey as String] as? String ?? "").isEmpty else { throw Failure.verificationFailed }
         try preserveOrigins(at: file, urls: [dataURL, metadataURL(originURL)].compactMap { $0 })
+    }
+    /// Preserve supplied identity and timestamps before handing metadata to Launch Services.
+    /// OS readback can omit or normalize optional properties independently of this policy.
+    static func preparedProperties(existing: [String: Any], downloadURL: URL?, originURL: URL?, now: Date = Date()) -> [String: Any] {
+        var properties = existing
+        // Preserve existing quarantine properties; never clear flags or grant user approval.
+        properties[kLSQuarantineTypeKey as String] = kLSQuarantineTypeWebDownload as String
+        if properties[kLSQuarantineAgentNameKey as String] == nil { properties[kLSQuarantineAgentNameKey as String] = "Origami" }
+        if properties[kLSQuarantineAgentBundleIdentifierKey as String] == nil {
+            properties[kLSQuarantineAgentBundleIdentifierKey as String] = Bundle.main.bundleIdentifier ?? "dev.1234567890.Origami"
+        }
+        if properties[kLSQuarantineTimeStampKey as String] == nil { properties[kLSQuarantineTimeStampKey as String] = now }
+        for key in [kLSQuarantineDataURLKey as String, kLSQuarantineOriginURLKey as String] {
+            let old = (properties[key] as? URL) ?? (properties[key] as? String).flatMap(URL.init(string:))
+            if let old { properties[key] = metadataURL(old) }
+        }
+        let dataURL = metadataURL(downloadURL)
+        if let dataURL { properties[kLSQuarantineDataURLKey as String] = dataURL }
+        if let origin = metadataURL(originURL), origin != dataURL {
+            properties[kLSQuarantineOriginURLKey as String] = origin
+        }
+        return properties
     }
     static func attribute(_ name: String, at file: URL) throws -> Data {
         let size = file.withUnsafeFileSystemRepresentation { getxattr($0!, name, nil, 0, 0, XATTR_NOFOLLOW) }
