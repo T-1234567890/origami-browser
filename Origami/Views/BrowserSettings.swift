@@ -56,7 +56,7 @@ struct BrowserSettings: View {
                     .disabled(store.application == nil)
                     .help(store.isPrivate ? "Close this Private Window and return to normal browsing" : "Open a separate Private Window")
                 Button { dismiss(); store.openInternal(.settings) } label: {
-                    Image(systemName: "gearshape").frame(width: 24, height: 24)
+                    Image(systemName: InternalPage.settings.symbol).frame(width: 24, height: 24)
                 }.buttonStyle(.plain).foregroundStyle(.secondary)
                     .help("All Settings").accessibilityLabel("All Settings")
             }

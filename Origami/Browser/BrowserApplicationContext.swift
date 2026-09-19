@@ -72,6 +72,13 @@ final class BrowserApplicationContext {
         store.save()
         return store
     }
+    @discardableResult func openImportedSession(_ session: BrowserSession) -> BrowserStore {
+        let store = install(session)
+        activeID = session.windowID
+        profileRevision += 1
+        openWindow?(session.windowID)
+        return store
+    }
     @discardableResult func newWindow(profileID: UUID? = nil) -> BrowserStore {
         var session = BrowserSession()
         session.profileID = profileID ?? activeStore?.session.profileID ?? BrowserProfile.defaultID
@@ -86,7 +93,7 @@ final class BrowserApplicationContext {
             guard let profile = try services.profiles.list().first(where: { $0.id == id }) else { throw RepositoryError.wrongProfile }
             let preferences = persistence?.preferences ?? activeStore?.preferences ?? BrowserPreferences()
             let privateServices = try BrowserServices(database: DatabaseManager(), preferences: preferences,
-                                                      privateProfile: profile, sharedBookmarks: services.bookmarks)
+                                                      privateProfile: profile, sharedBookmarks: services.bookmarks, sharedBlocking: services.blocking)
             var session = BrowserSession(); session.profileID = id
             preferences.apply(to: &session)
             let store = BrowserStore(session: session, services: privateServices, preferences: preferences)
@@ -98,9 +105,9 @@ final class BrowserApplicationContext {
         } catch { activeStore?.persistenceError = "The private window could not be opened. " + error.localizedDescription; return nil }
     }
     /// Switching identities focuses or restores that profile's own window; WebViews never cross stores.
-    @discardableResult func switchProfile(_ id: UUID, in source: BrowserStore? = nil) throws -> BrowserStore {
+    @discardableResult func switchProfile(_ id: UUID, in source: BrowserStore? = nil, keepPreferencesOpen: Bool = false) throws -> BrowserStore {
         guard try services?.profiles.list().contains(where: { $0.id == id }) == true else { throw RepositoryError.wrongProfile }
-        if let source { return try replaceProfile(id, in: source) }
+        if let source { return try replaceProfile(id, in: source, keepPreferencesOpen: keepPreferencesOpen) }
         persistence?.preferences.currentProfileID = id
         if let existing = stores.values.first(where: { !$0.isPrivate && $0.session.profileID == id }) {
             activeID = existing.session.windowID
@@ -117,7 +124,7 @@ final class BrowserApplicationContext {
         let store = newWindow(profileID: id); activeID = store.session.windowID; return store
     }
     /// Replace a window's identity context without moving WebViews between profiles.
-    private func replaceProfile(_ id: UUID, in source: BrowserStore) throws -> BrowserStore {
+    private func replaceProfile(_ id: UUID, in source: BrowserStore, keepPreferencesOpen: Bool) throws -> BrowserStore {
         guard !source.isPrivate, stores[source.session.windowID] === source, let services else { throw RepositoryError.wrongProfile }
         if source.session.profileID == id { return source }
         let repository = SessionRepository(services.profiles.database)
@@ -146,7 +153,7 @@ final class BrowserApplicationContext {
         stores[session.windowID] = replacement
         if let state {
             states[session.windowID] = state
-            state.showingPreferences = false
+            state.showingPreferences = keepPreferencesOpen
             state.profileStore = replacement
         }
         if initialID == source.session.windowID { initialID = session.windowID }
@@ -154,6 +161,26 @@ final class BrowserApplicationContext {
         source.preferences.currentProfileID = id
         replacement.startLifecycleMonitoring()
         return replacement
+    }
+
+    func updateProfile(_ id: UUID, name: String, color: ProfileColor, sharing: ProfileSharing) throws {
+        guard let services, let previous = try services.profiles.list().first(where: { $0.id == id }) else { throw RepositoryError.wrongProfile }
+        try services.profiles.update(id, name: name, color: color, sharing: id == BrowserProfile.defaultID ? nil : sharing)
+        profileRevision += 1
+        for store in stores.values where !store.isPrivate && store.session.profileID == id {
+            if previous.sharing.website != sharing.website {
+                // A WKWebView's data store cannot be changed after creation.
+                store.dismissPeek()
+                store.resolveConfirmation(false)
+                store.pages.values.forEach { $0.dispose() }
+                store.pages.removeAll()
+            }
+            store.bookmarksChanged()
+            store.applyProfileLayout()
+            store.preferencesRevision += 1
+            store.save()
+        }
+        NotificationCenter.default.post(name: .origamiHistoryChanged, object: nil)
     }
 
     func deleteProfile(_ id: UUID) async throws {
@@ -166,11 +193,16 @@ final class BrowserApplicationContext {
             window?.close()
         }
         services.downloads.cancel(profileID: id)
-        await services.websiteData.clear(profile: profile)
+        var ownedProfile = profile
+        ownedProfile.sharing.website = false
+        await services.websiteData.clear(profile: ownedProfile)
         try services.profiles.delete(id)
+        persistence?.preferences.removeProfilePreferences(id)
         profileRevision += 1
         if persistence?.preferences.currentProfileID == id { persistence?.preferences.currentProfileID = BrowserProfile.defaultID }
-        _ = try switchProfile(BrowserProfile.defaultID)
+        // Deleting an unrelated profile must not change the user's current context.
+        // Only provide a replacement when deletion closed every browser window.
+        if stores.isEmpty { _ = try switchProfile(BrowserProfile.defaultID) }
     }
 
     func close(_ id: UUID) {
@@ -179,6 +211,7 @@ final class BrowserApplicationContext {
         do { if stores[id]?.isPrivate != true, let persistence { try SessionRepository(persistence.database).closeWindow(id) } }
         catch { activeStore?.persistenceError = error.localizedDescription }
         if stores[id]?.isPrivate == true {
+            if let store = stores[id] { try? store.services?.highlighter.store.clear(profile: store.session.profileID) }
             stores[id]?.services?.downloads.cancelAll()
             stores[id]?.services?.feeds.cancelAll()
             if let store = stores[id], let data = try? store.services?.websiteStore(profileID: store.session.profileID) {

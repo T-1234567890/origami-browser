@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Small browser diagrams show tab placement without introducing another toolbar.
 struct OnboardingLayoutChoice: View {
+    @Environment(\.profileAppearance) private var appearance
     let layout: TabLayout
     let selected: Bool
     let select: () -> Void
@@ -16,7 +17,7 @@ struct OnboardingLayoutChoice: View {
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                     .overlay {
                         RoundedRectangle(cornerRadius: 9)
-                            .strokeBorder(selected ? Personalization.shared.accent : Color.primary.opacity(0.18), lineWidth: selected ? 2 : 1)
+                            .strokeBorder(selected ? appearance.accent : Color.primary.opacity(0.18), lineWidth: selected ? 2 : 1)
                     }
                 Text(vertical ? "Vertical" : "Horizontal")
                     .font(.system(size: 14, weight: selected ? .medium : .regular))
@@ -64,6 +65,6 @@ struct OnboardingLayoutChoice: View {
         }.accessibilityHidden(true)
     }
     private func tab(selected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 3).fill(selected ? Personalization.shared.accent.opacity(0.3) : Color.primary.opacity(0.08))
+        RoundedRectangle(cornerRadius: 3).fill(selected ? appearance.accent.opacity(0.3) : Color.primary.opacity(0.08))
     }
 }

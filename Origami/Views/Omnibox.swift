@@ -8,6 +8,7 @@ struct Omnibox: NSViewRepresentable {
     var tabID: UUID?
     var value: String
     var focusRequest: UUID
+    var connectionWarning = false
     var canFocus = true
     var suggestionsEnabled = true
     var suggestionAnchor: SuggestionAnchor?
@@ -56,6 +57,7 @@ struct Omnibox: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
         var active = true
         private var updateScheduled = false
+        private var lastAddress: String?
         private var editingNotificationScheduled = false
         private var pendingEditing = false
         func scheduleUpdate(_ field: AddressField) {
@@ -82,12 +84,28 @@ struct Omnibox: NSViewRepresentable {
                 if editing { field.window?.makeFirstResponder(nil) }
                 editing = false; reportEditing(false)
             }
-            if !editing { field.stringValue = OmniboxPresentation.displayValue(parent.value) }
+            // A focused, untouched address must follow redirects and HTTP fallback.
+            // Keep an actual user edit intact instead of overwriting it on navigation.
+            if editing, let previous = lastAddress,
+               OmniboxPresentation.shouldRefreshEditing(previous: previous, current: parent.value, text: field.currentEditor()?.string ?? field.stringValue) {
+                let text = OmniboxPresentation.editingValue(parent.value)
+                field.stringValue = text
+                if let editor = field.currentEditor() as? NSTextView {
+                    editor.string = text
+                    editor.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+                }
+            }
+            lastAddress = parent.value
+            if !editing { displayAddress(field) }
+            else { styleEditor(field) }
             if !parent.canFocus && lastFocus == nil { lastFocus = parent.focusRequest }
             if parent.canFocus && lastFocus != parent.focusRequest {
                 lastFocus = parent.focusRequest
                 field.window?.makeFirstResponder(field); field.selectText(nil)
             }
+        }
+        private func displayAddress(_ field: NSTextField) {
+            field.attributedStringValue = OmniboxPresentation.attributedDisplay(parent.value, font: .systemFont(ofSize: parent.fontSize), connectionWarning: parent.connectionWarning)
         }
         func reportEditing(_ value: Bool) {
             pendingEditing = value
@@ -161,7 +179,7 @@ struct Omnibox: NSViewRepresentable {
             let fullRange = NSRange(location: 0, length: (editor.string as NSString).length)
             editor.textStorage?.addAttribute(.foregroundColor, value: foreground, range: fullRange)
             let length = OmniboxPresentation.schemeLength(editor.string)
-            if length > 0 { editor.textStorage?.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: NSRange(location: 0, length: length)) }
+            if length > 0 { editor.textStorage?.addAttribute(.foregroundColor, value: (OmniboxPresentation.isInsecure(editor.string) || parent.connectionWarning) ? NSColor.systemRed : NSColor.secondaryLabelColor, range: NSRange(location: 0, length: length)) }
             editor.typingAttributes[.foregroundColor] = foreground
         }
         func controlTextDidBeginEditing(_ obj: Notification) {
@@ -179,7 +197,7 @@ struct Omnibox: NSViewRepresentable {
         func controlTextDidEndEditing(_ obj: Notification) {
             if NSApp.currentEvent?.window !== dropdown.panel { dismissSuggestions() }
             editing = false; reportEditing(false)
-            (obj.object as? NSTextField)?.stringValue = OmniboxPresentation.displayValue(parent.value)
+            if let field = obj.object as? NSTextField { displayAddress(field) }
         }
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
             guard let field = control as? NSTextField else { return false }

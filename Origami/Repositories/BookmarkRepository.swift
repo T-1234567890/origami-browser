@@ -22,6 +22,7 @@ final class BookmarkRepository {
         if let id, try !Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM bookmark_folders WHERE id=? AND profile_id=?)", arguments: [id.uuidString, profileID.uuidString])! { throw RepositoryError.wrongProfile }
     }
     @discardableResult func createFolder(title: String, parentID: UUID? = nil, position: Int = 0, profileID: UUID) throws -> UUID {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         let id = UUID()
         try database.queue.write { db in
             try validateFolder(parentID, profileID: profileID, db: db)
@@ -30,6 +31,7 @@ final class BookmarkRepository {
         return id
     }
     @discardableResult func create(url: URL, title: String, folderID: UUID? = nil, position: Int = 0, profileID: UUID) throws -> UUID {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let url = PersistedURL.clean(url) else { throw RepositoryError.invalidInput }
         let id = UUID()
         try database.queue.write { db in
@@ -39,6 +41,7 @@ final class BookmarkRepository {
         return id
     }
     func bookmark(url: URL, profileID: UUID) throws -> Bookmark? {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let url = PersistedURL.clean(url) else { return nil }
         return try database.queue.read { db in
             guard let row = try Row.fetchOne(db, sql: "SELECT * FROM bookmarks WHERE profile_id=? AND url=? ORDER BY position,id LIMIT 1", arguments: [profileID.uuidString, url.absoluteString]),
@@ -47,6 +50,7 @@ final class BookmarkRepository {
         }
     }
     func editDetails(_ id: UUID, url: URL, title: String, folderID: UUID?, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let url = PersistedURL.clean(url), ["https", "http"].contains(url.scheme), !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw RepositoryError.invalidInput }
         try database.queue.write { db in
             try validateFolder(folderID, profileID: profileID, db: db)
@@ -55,16 +59,19 @@ final class BookmarkRepository {
         }
     }
     func removePage(url: URL, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let url = PersistedURL.clean(url) else { throw RepositoryError.invalidInput }
         try database.queue.write { try $0.execute(sql: "DELETE FROM bookmarks WHERE profile_id=? AND url=?", arguments: [profileID.uuidString, url.absoluteString]) }
     }
     func contains(url: URL, profileID: UUID) throws -> Bool {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let url = PersistedURL.clean(url) else { return false }
         return try database.queue.read { db in
             try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM bookmarks WHERE profile_id=? AND url=?)", arguments: [profileID.uuidString, url.absoluteString]) ?? false
         }
     }
     func suggestionCandidates(query: String, profileID: UUID) throws -> [(Bookmark, String)] {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         let words = query.split(whereSeparator: \.isWhitespace).prefix(12)
         guard !words.isEmpty else { return [] }
         func escaped(_ text: String) -> String { text.replacingOccurrences(of: "!", with: "!!").replacingOccurrences(of: "%", with: "!%").replacingOccurrences(of: "_", with: "!_") }
@@ -86,7 +93,8 @@ final class BookmarkRepository {
         }
     }
     func list(profileID: UUID) throws -> [Bookmark] {
-        try database.queue.read { db in
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
+        return try database.queue.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM bookmarks WHERE profile_id=? ORDER BY position,id", arguments: [profileID.uuidString]).compactMap {
                 guard let id = UUID(uuidString: $0["id"]) else { return nil }
                 return Bookmark(id: id, folderID: ($0["folder_id"] as String?).flatMap(UUID.init(uuidString:)), title: $0["title"], url: $0["url"], position: $0["position"])
@@ -94,7 +102,8 @@ final class BookmarkRepository {
         }
     }
     func folders(profileID: UUID) throws -> [BookmarkFolder] {
-        try database.queue.read { db in
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
+        return try database.queue.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM bookmark_folders WHERE profile_id=? ORDER BY position,id", arguments: [profileID.uuidString]).compactMap {
                 guard let id = UUID(uuidString: $0["id"]) else { return nil }
                 return BookmarkFolder(id: id, parentID: ($0["parent_id"] as String?).flatMap(UUID.init(uuidString:)), title: $0["title"], position: $0["position"])
@@ -102,18 +111,22 @@ final class BookmarkRepository {
         }
     }
     func update(_ id: UUID, title: String, folderID: UUID?, position: Int, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         try database.queue.write { db in
             try validateFolder(folderID, profileID: profileID, db: db)
             try db.execute(sql: "UPDATE bookmarks SET title=?,folder_id=?,position=? WHERE id=? AND profile_id=?", arguments: [title, folderID?.uuidString, position, id.uuidString, profileID.uuidString])
         }
     }
     func renameFolder(_ id: UUID, title: String, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         try database.queue.write { try $0.execute(sql: "UPDATE bookmark_folders SET title=? WHERE id=? AND profile_id=?", arguments: [title, id.uuidString, profileID.uuidString]) }
     }
     func delete(_ id: UUID, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         try database.queue.write { try $0.execute(sql: "DELETE FROM bookmarks WHERE id=? AND profile_id=?", arguments: [id.uuidString, profileID.uuidString]) }
     }
     func deleteFolder(_ id: UUID, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         try database.queue.write { try $0.execute(sql: "DELETE FROM bookmark_folders WHERE id=? AND profile_id=?", arguments: [id.uuidString, profileID.uuidString]) }
     }
 }

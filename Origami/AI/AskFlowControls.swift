@@ -73,6 +73,7 @@ private struct ModelSearchList: View {
 }
 
 struct AskModeControl: View {
+    @Environment(\.profileAppearance) private var appearance
     @Bindable private var settings = AISettings.shared
     @Binding var mode: AskMode
     @State private var showing = false
@@ -82,7 +83,7 @@ struct AskModeControl: View {
             .popover(isPresented: $showing) {
                 VStack(spacing: 14) {
                     Text(mode.rawValue).font(.headline)
-                    Slider(value: Binding(get: { Double(AskMode.allCases.firstIndex(of: mode) ?? 0) }, set: { mode = AskMode.allCases[Int($0.rounded())] }), in: 0...2, step: 1).tint(Personalization.shared.accent)
+                    Slider(value: Binding(get: { Double(AskMode.allCases.firstIndex(of: mode) ?? 0) }, set: { mode = AskMode.allCases[Int($0.rounded())] }), in: 0...2, step: 1).tint(appearance.accent)
                         .accessibilityLabel("Answer mode").accessibilityValue(mode.rawValue)
                     HStack { ForEach(AskMode.allCases, id: \.self) { value in Button(value.rawValue) { mode = value }.buttonStyle(.plain).font(.caption).frame(maxWidth: .infinity) } }
                     Divider()
@@ -93,6 +94,7 @@ struct AskModeControl: View {
 }
 
 struct AskTimeline: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     let tabID: UUID
     @State private var events: [AISearchEvent] = []
@@ -122,7 +124,7 @@ struct AskTimeline: View {
                             if selecting {
                                 Toggle("Select exploration", isOn: Binding(get: { selected.contains(event.id) }, set: { if $0 { selected.insert(event.id) } else { selected.remove(event.id) } })).labelsHidden().toggleStyle(.checkbox)
                             } else {
-                                VStack(spacing: 0) { Circle().fill(Personalization.shared.accent).frame(width: 7, height: 7); Rectangle().fill(.separator).frame(width: 1).frame(maxHeight: .infinity) }.frame(width: 12)
+                                VStack(spacing: 0) { Circle().fill(appearance.accent).frame(width: 7, height: 7); Rectangle().fill(.separator).frame(width: 1).frame(maxHeight: .infinity) }.frame(width: 12)
                             }
                             Button {
                                 if selecting { if !selected.insert(event.id).inserted { selected.remove(event.id) }; return }

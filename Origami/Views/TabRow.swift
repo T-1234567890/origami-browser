@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TabRow: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     let tab: BrowserTab
     let vertical: Bool
@@ -9,7 +10,7 @@ struct TabRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovered = false
     private var active: Bool { store.session.selectedTabID == tab.id }
-    private var rowHeight: CGFloat { tab.isPinned ? (vertical ? BrowserChromeMetrics.pinnedHeight : BrowserChromeMetrics.horizontalPinnedHeight) : BrowserChromeMetrics.tabHeight }
+    private var rowHeight: CGFloat { tab.isPinned ? (vertical ? BrowserChromeMetrics.pinnedHeight : BrowserChromeMetrics.horizontalPinnedHeight) : appearance.tabHeight }
     private var showsClose: Bool { active || hovered }
     private var tabShape: UnevenRoundedRectangle {
         if tab.isPinned { return UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 8) }
@@ -57,11 +58,11 @@ struct TabRow: View {
                height: rowHeight)
         .background {
             tabShape
-                .fill(active && !tab.isPinned ? Personalization.shared.accent.opacity(0.24) : (active && tab.isPinned ? Personalization.shared.accent.opacity(hovered ? 0.22 : 0.14) : Color.primary.opacity(hovered ? 0.08 : 0)))
+                .fill(active && !tab.isPinned ? appearance.accent.opacity(0.24) : (active && tab.isPinned ? appearance.accent.opacity(hovered ? 0.22 : 0.14) : Color.primary.opacity(hovered ? 0.08 : 0)))
         }
         .overlay(alignment: vertical ? .leading : .top) {
             if vertical && active && !tab.isPinned {
-                Rectangle().fill(Personalization.shared.accent)
+                Rectangle().fill(appearance.accent)
                     .frame(width: vertical ? 2 : nil, height: vertical ? nil : 2)
                     .allowsHitTesting(false)
             }
@@ -87,7 +88,7 @@ struct TabRow: View {
             Button(tab.isSleeping == true ? "Wake Tab" : "Sleep Tab") { if tab.isSleeping == true { store.wake(tab.id) } else { Task { await store.sleep(tab.id) } } }
                 .disabled(tab.isPinned)
             Button("Never Sleep This Site") { store.neverSleep(tab) }.disabled(tab.url?.host == nil)
-            Button("Bookmark Tab") { if let url = tab.url { do { _ = try store.services?.bookmarks.addUnique(url: url, title: tab.title, profileID: store.session.profileID); store.bookmarkRevision += 1 } catch { store.persistenceError = error.localizedDescription } } }
+            Button("Bookmark Tab") { if let url = tab.url { do { _ = try store.services?.bookmarks.addUnique(url: url, title: tab.title, profileID: store.session.profileID); store.bookmarksChanged() } catch { store.persistenceError = error.localizedDescription } } }
             if !store.isPrivate, let app = store.application {
                 Menu("Move to Window") {
                     ForEach(app.stores.values.filter { $0 !== store && !$0.isPrivate && $0.session.profileID == store.session.profileID }.sorted { $0.session.windowID.uuidString < $1.session.windowID.uuidString }, id: \.session.windowID) { target in
@@ -127,8 +128,10 @@ private struct TabIcon: View {
             else if page?.mediaState.isPlayingMedia == true && page?.mediaState.isMuted == true { Image(systemName: "speaker.slash.fill").accessibilityLabel("Muted") }
             else if page?.mediaState.isPlayingMedia == true { Image(systemName: "speaker.wave.2.fill").accessibilityLabel("Playing") }
             else if page?.isLoading == true { ProgressView().controlSize(.mini) }
+            else if page?.nativePage == .newtab && page?.isAsking == true { Image(systemName: "sparkles").foregroundStyle(.secondary) }
+            else if let url = tab.url, InternalRoute.page(for: url) != nil { SiteIcon(store: store, url: url, size: 14) }
             else if let icon = page?.favicon { Image(nsImage: icon).resizable().scaledToFit() }
-            else if tab.url == nil { Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.secondary) }
+            else if tab.url == nil { Image(systemName: InternalPage.newtab.symbol).font(.system(size: 12)).foregroundStyle(.secondary) }
             else { SiteIcon(store: store, url: tab.url, size: 14) }
         }.frame(width: 14, height: 14)
     }

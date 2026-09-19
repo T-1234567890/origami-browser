@@ -22,7 +22,7 @@ struct ClearDataButton: View {
                             Toggle(title, isOn: Binding(get: { categories.contains(key) }, set: { if $0 { categories.insert(key) } else { categories.remove(key) } })).toggleStyle(.checkbox)
                         }
                     }
-                    Text("Only the current profile is affected.").font(.caption).foregroundStyle(.secondary)
+                    Text("Shared categories are cleared for every profile using that data. Private window data remains separate.").font(.caption).foregroundStyle(.secondary)
                     HStack {
                         Button("Cancel") { presented = false }; Spacer()
                         Button("Continue…") {

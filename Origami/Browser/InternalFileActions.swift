@@ -18,6 +18,6 @@ extension BrowserStore {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
         if method == "downloads.directory" { preferences.downloadDirectoryBookmark = try url.bookmarkData(options: .withSecurityScope); return true }
         let count = try BookmarkHTMLService(services.bookmarks).importHTML(Data(contentsOf: url), profileID: session.profileID)
-        bookmarkRevision += 1; return count
+        bookmarksChanged(); return count
     }
 }

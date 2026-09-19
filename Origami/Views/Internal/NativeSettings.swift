@@ -5,7 +5,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     var id: Self { self }
     var icon: String {
         switch self {
-        case .ai: "text.magnifyingglass"
+        case .ai: "sparkles"
         case .appearance: "paintpalette"
         case .general: "gearshape"
         case .tabs: "rectangle.on.rectangle"
@@ -17,6 +17,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
 }
 
 struct NativeSettings: View {
+    @Environment(\.profileAppearance) private var appearance
     let model: InternalContentModel
     private var category: SettingsCategory { SettingsCategory(rawValue: model.store.settingsCategory) ?? .general }
     @State private var layout = TabLayout.horizontal
@@ -31,6 +32,11 @@ struct NativeSettings: View {
     @State private var loaded = false
     @State private var retentionDays = 90
 
+    private var scopeLabel: String? {
+        _ = model.store.application?.profileRevision
+        guard let profile = try? model.store.services?.profiles.list().first(where: { $0.id == model.store.session.profileID }) else { return nil }
+        return SettingsScope.label(category: category.rawValue, profile: profile)
+    }
     var body: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal) {
@@ -40,8 +46,8 @@ struct NativeSettings: View {
                             Label(item.rawValue, systemImage: item.icon)
                                 .font(.system(size: 12, weight: category == item ? .semibold : .regular))
                                 .padding(.horizontal, 12).padding(.vertical, 9)
-                                .foregroundStyle(category == item ? Personalization.shared.accent : Color.secondary)
-                                .background(category == item ? Personalization.shared.accent.opacity(0.14) : .clear,
+                                .foregroundStyle(category == item ? appearance.accent : Color.secondary)
+                                .background(category == item ? appearance.accent.opacity(0.14) : .clear,
                                             in: RoundedRectangle(cornerRadius: 7))
                                 .contentShape(Rectangle())
                         }
@@ -56,8 +62,13 @@ struct NativeSettings: View {
             .accessibilityLabel("Settings categories")
             Divider()
             VStack(alignment: .leading, spacing: 0) {
-                Text(category.rawValue).font(.title2.weight(.semibold))
-                    .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 8)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(category.rawValue).font(.title2.weight(.semibold))
+                    if let scopeLabel {
+                        Label(scopeLabel, systemImage: scopeLabel == "Synchronized with default profile" ? "arrow.triangle.2.circlepath" : "person.crop.circle").font(.caption).foregroundStyle(.secondary)
+                            .help(category == .tabs ? "Applies to tab layout. Other options on this page remain shared." : scopeLabel == "Synchronized with default profile" ? "These settings are shared with the default profile." : "These settings apply to this profile.")
+                    }
+                }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 8)
                 if category == .ai { AISettingsView(store: model.store) } else {
                 Form {
                     switch category {
@@ -68,14 +79,25 @@ struct NativeSettings: View {
                         Section {
                             Toggle("Restore previous session", isOn: setting($restore, key: "restore"))
                             actionRow("Welcome", action: "Show Again") { model.store.openInternal(.welcome) }
+                            if !model.store.isPrivate {
+                                actionRow("Import Browser Data", action: "Import…") { model.store.newTab(url: InternalPage.migration.url) }
+                            }
                         }
                         if !model.store.isPrivate {
                             Section {
                                 actionRow("Profiles", action: "Manage…") { model.open(InternalPage.profiles.url.absoluteString) }
                             }
                         }
+                        Section("Peek") {
+                            Picker("Link previews", selection: Binding(get: { model.store.peekMode }, set: { model.store.setPeekMode($0) })) {
+                                ForEach(PeekMode.allCases) { Text($0.title).tag($0) }
+                            }
+                            Text("On Demand starts with a preview; swipe horizontally for details. Automatic starts with details. No AI is used.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let manager = model.store.services?.highlighter { WebHighlighterSettings(manager: manager) }
                         UpdatesSettings()
-                        AboutSettings()
+                        AboutSettings(store: model.store)
                     case .tabs:
                         Section {
                             Picker("Tab layout", selection: setting($layout, key: "layout", encode: { $0.rawValue })) {
@@ -124,19 +146,29 @@ struct NativeSettings: View {
                         Section {
                             Toggle("Block pop-ups and autoplay by default", isOn: setting($strict, key: "privacy", encode: { $0 ? "strict" : "standard" }))
                         }
-                        Section {
+                        Section("Connection Security") {
+                            Toggle("HTTPS-First", isOn: Binding(get: { model.store.preferences.httpsFirst }, set: {
+                                model.store.preferences.httpsFirst = $0; model.store.preferencesRevision += 1
+                            }))
+                            Text("Try an encrypted connection first. If HTTPS is unavailable, block the page until you choose to continue over HTTP. Disabling this does not bypass certificate errors.").font(.callout).foregroundStyle(.secondary)
+                        }
+                        if let blocking = model.store.services?.blocking { BlockingSettings(service: blocking) }
+                        Section("Website Data & Permissions") {
                             actionRow("Website Data", action: "Manage…") { model.open(InternalPage.data.url.absoluteString) }
                             actionRow("Website Permissions", action: "Manage…") { model.open(InternalPage.permissions.url.absoluteString) }
                         }
                     }
                 }
-                .formStyle(.grouped).toggleStyle(.switch).controlSize(.small)
+                .formStyle(.grouped).toggleStyle(.switch).controlSize(.regular)
+                .font(.body)
+                .scrollIndicators(.hidden)
                 .disabled(!loaded)
                 }
             }
             .frame(maxWidth: 680, maxHeight: .infinity, alignment: .topLeading)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
         }
         .task {
             guard let values = await model.call("settings.read") as? [String: Any] else { return }
@@ -153,7 +185,7 @@ struct NativeSettings: View {
 
     private func actionRow(_ title: String, action: String, perform: @escaping () -> Void) -> some View {
         HStack {
-            Text(title)
+            Text(title).font(.body)
             Spacer(minLength: 16)
             Button(action, action: perform)
         }
@@ -179,12 +211,13 @@ struct NativeProfiles: View {
     @State private var editing: UUID?
     @State private var name = ""
     @State private var color = ProfileColor.mint
+    @State private var sharing = ProfileSharing()
     @State private var showEditor = false
     @State private var deleting: BrowserProfile?
     @State private var busy = false
     var body: some View {
         InternalContent(title: "Profiles") {
-            Text("Separate website data, logins, history, and tabs.").foregroundStyle(.secondary)
+            Text("Choose what each profile keeps separate or shares with the default profile. Tabs always stay separate.").foregroundStyle(.secondary)
             ForEach(profiles) { profile in
                 HStack(spacing: 12) {
                     Circle().fill(profile.color.tint).frame(width: 12, height: 12)
@@ -194,15 +227,15 @@ struct NativeProfiles: View {
                     if profile.id != model.store.session.profileID {
                         Button("Switch") { perform { _ = try model.store.application?.switchProfile(profile.id, in: model.store) } }
                     }
-                    Button("Edit…") { editing = profile.id; name = profile.name; color = profile.color; showEditor = true }
-                    if profile.id != BrowserProfile.defaultID {
-                        Button { deleting = profile } label: { Image(systemName: "trash") }
-                            .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Delete " + profile.name)
-                    }
+                    Button("Edit…") { editing = profile.id; name = profile.name; color = profile.color; sharing = profile.sharing; showEditor = true }
+                    Button { deleting = profile } label: { Image(systemName: "trash") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Delete " + profile.name)
+                        .disabled(profile.id == BrowserProfile.defaultID)
+                        .help(profile.id == BrowserProfile.defaultID ? "The default profile cannot be deleted." : "Delete profile")
                 }.padding(.vertical, 6)
                 Divider()
             }
-            Button("New Profile…") { editing = nil; name = ""; color = .mint; showEditor = true }
+            Button("New Profile…") { editing = nil; name = ""; color = .mint; sharing = ProfileSharing(); showEditor = true }
         }
         .disabled(busy || model.store.isPrivate)
         .task { refresh() }
@@ -219,16 +252,34 @@ struct NativeProfiles: View {
                             .accessibilityAddTraits(color == option ? .isSelected : [])
                     }
                 }
+                if editing != BrowserProfile.defaultID {
+                    Text("Share with default profile").font(.subheadline.weight(.semibold))
+                    ForEach(ProfileDataKind.allCases) { kind in
+                        Toggle(kind.title, isOn: Binding(get: { sharing[kind] }, set: { sharing[kind] = $0 }))
+                    }
+                    Text("Sharing uses the default profile’s data without merging or deleting this profile’s own data. Turn sharing off to return to its own data. Deleting shared history or bookmarks affects all profiles using it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("Changing website sharing reloads this profile’s open pages. Save any unfinished forms first.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("The default profile is the shared destination. Other profiles choose which categories to share with it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Open tabs, pins and tab groups stay separate. AI and search settings remain global.")
+                    .font(.caption).foregroundStyle(.secondary)
                 HStack { Spacer(); Button("Cancel") { showEditor = false }; Button("Save") {
                     perform {
                         guard let repository = model.store.services?.profiles else { throw RepositoryError.invalidInput }
-                        if let editing { try repository.update(editing, name: name, color: color) }
-                        else { _ = try repository.create(name: name, color: color) }
+                        if let editing {
+                            try model.store.application?.updateProfile(editing, name: name, color: color, sharing: sharing)
+                        } else {
+                            _ = try repository.create(name: name, color: color, sharing: sharing)
+                        }
                         model.store.application?.profileRevision += 1
                         refresh(); showEditor = false
                     }
                 }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-            }.padding(20).frame(width: 300)
+            }.padding(20).frame(width: 420)
         }
         .alert("Delete Profile?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("Cancel", role: .cancel) { deleting = nil }
@@ -242,7 +293,7 @@ struct NativeProfiles: View {
                 }
             }
         } message: {
-            Text("This closes this profile’s windows and deletes its website data, history, bookmarks, permissions, and saved tabs. Downloaded files remain.")
+            Text("This closes this profile’s windows and deletes its own website data, history, bookmarks, permissions, and saved tabs. Shared Personal data and downloaded files remain.")
         }
     }
     private func refresh() { perform { profiles = try model.store.services?.profiles.list() ?? [] } }

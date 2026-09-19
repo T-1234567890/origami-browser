@@ -6,37 +6,45 @@ import Observation
 @MainActor @Observable final class Personalization {
     static let shared = Personalization()
     private let defaults: UserDefaults
-    var mode: String { didSet { defaults.set(mode, forKey: "appearance.mode") } }
-    var hex: String { didSet { defaults.set(hex, forKey: "appearance.accent") } }
-    var gradientEnabled: Bool { didSet { defaults.set(gradientEnabled, forKey: "appearance.gradient") } }
-    var gradientHex: String { didSet { defaults.set(gradientHex, forKey: "appearance.gradientEnd") } }
-    var frameFill: Bool { didSet { defaults.set(frameFill, forKey: "appearance.frameFill") } }
-    var density: String { didSet { defaults.set(density, forKey: "appearance.density") } }
-    var frame: String { didSet { defaults.set(frame, forKey: "appearance.frame") } }
-    var glass: String { didSet { defaults.set(glass, forKey: "appearance.glass") } }
+    private let prefix: String
+    var mode: String { didSet { defaults.set(mode, forKey: prefix + "appearance.mode") } }
+    var hex: String { didSet { defaults.set(hex, forKey: prefix + "appearance.accent") } }
+    var gradientEnabled: Bool { didSet { defaults.set(gradientEnabled, forKey: prefix + "appearance.gradient") } }
+    var gradientHex: String { didSet { defaults.set(gradientHex, forKey: prefix + "appearance.gradientEnd") } }
+    var frameFill: Bool { didSet { defaults.set(frameFill, forKey: prefix + "appearance.frameFill") } }
+    var density: String { didSet { defaults.set(density, forKey: prefix + "appearance.density") } }
+    var frame: String { didSet { defaults.set(frame, forKey: prefix + "appearance.frame") } }
+    var glass: String { didSet { defaults.set(glass, forKey: prefix + "appearance.glass") } }
     var defaultAsk: Bool { didSet { defaults.set(defaultAsk, forKey: "newTab.defaultAsk") } }
-    var favorites: Bool { didSet { defaults.set(favorites, forKey: "appearance.favorites") } }
-    var titleImage: Data? { didSet { defaults.set(titleImage, forKey: "appearance.titleImage") } }
-    var wallpaper: Data? { didSet { defaults.set(wallpaper, forKey: "appearance.wallpaper"); wallpaperIsDark = Self.isDark(wallpaper) } }
+    var favorites: Bool { didSet { defaults.set(favorites, forKey: prefix + "appearance.favorites") } }
+    var titleImage: Data? { didSet { defaults.set(titleImage, forKey: prefix + "appearance.titleImage") } }
+    var wallpaper: Data? { didSet { defaults.set(wallpaper, forKey: prefix + "appearance.wallpaper"); wallpaperIsDark = Self.isDark(wallpaper) } }
     var wallpaperIsDark = false
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, prefix: String = "") {
         self.defaults = defaults
+        self.prefix = prefix
+        if !prefix.isEmpty && !defaults.bool(forKey: prefix + "initialized") {
+            for (key, value) in defaults.dictionaryRepresentation() where key.hasPrefix("appearance.") {
+                defaults.set(value, forKey: prefix + key)
+            }
+            defaults.set(true, forKey: prefix + "initialized")
+        }
         defaultAsk = defaults.bool(forKey: "newTab.defaultAsk")
-        mode = defaults.string(forKey: "appearance.mode") ?? "System"
-        hex = defaults.string(forKey: "appearance.accent") ?? "55D4B3"
-        gradientEnabled = defaults.bool(forKey: "appearance.gradient")
-        gradientHex = defaults.string(forKey: "appearance.gradientEnd") ?? "84A9F5"
-        let combinedFill = defaults.bool(forKey: "appearance.frameFill") || defaults.bool(forKey: "appearance.sidebarTint")
+        mode = defaults.string(forKey: prefix + "appearance.mode") ?? "System"
+        hex = defaults.string(forKey: prefix + "appearance.accent") ?? "55D4B3"
+        gradientEnabled = defaults.bool(forKey: prefix + "appearance.gradient")
+        gradientHex = defaults.string(forKey: prefix + "appearance.gradientEnd") ?? "84A9F5"
+        let combinedFill = defaults.bool(forKey: prefix + "appearance.frameFill") || defaults.bool(forKey: prefix + "appearance.sidebarTint")
         frameFill = combinedFill
         // Fold the former sidebar-only preference into the single background control.
-        defaults.set(combinedFill, forKey: "appearance.frameFill")
-        defaults.removeObject(forKey: "appearance.sidebarTint")
-        density = defaults.string(forKey: "appearance.density") ?? "Standard"
-        frame = defaults.string(forKey: "appearance.frame") ?? (defaults.object(forKey: "browser.contentFrame") as? Bool == false ? "Off" : "Subtle")
-        glass = defaults.string(forKey: "appearance.glass") ?? "Standard"
-        favorites = defaults.object(forKey: "appearance.favorites") as? Bool ?? true
-        titleImage = defaults.data(forKey: "appearance.titleImage")
-        wallpaper = defaults.data(forKey: "appearance.wallpaper")
+        defaults.set(combinedFill, forKey: prefix + "appearance.frameFill")
+        defaults.removeObject(forKey: prefix + "appearance.sidebarTint")
+        density = defaults.string(forKey: prefix + "appearance.density") ?? "Standard"
+        frame = defaults.string(forKey: prefix + "appearance.frame") ?? (defaults.object(forKey: "browser.contentFrame") as? Bool == false ? "Off" : "Subtle")
+        glass = defaults.string(forKey: prefix + "appearance.glass") ?? "Standard"
+        favorites = defaults.object(forKey: prefix + "appearance.favorites") as? Bool ?? true
+        titleImage = defaults.data(forKey: prefix + "appearance.titleImage")
+        wallpaper = defaults.data(forKey: prefix + "appearance.wallpaper")
         wallpaperIsDark = Self.isDark(wallpaper)
     }
     private static func isDark(_ data: Data?) -> Bool {
@@ -75,9 +83,11 @@ import Observation
 
 struct AppearanceSettings: View {
     let layout: TabLayout
-    @Bindable private var settings = Personalization.shared
+    @Environment(\.profileAppearance) private var appearance
+    private var settings: Personalization { appearance }
     @State private var error: String?
     var body: some View {
+        @Bindable var settings = appearance
         Section("Appearance") {
             Picker("Appearance", selection: $settings.mode) { ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) } }
             LabeledContent("Main accent") {
@@ -94,7 +104,7 @@ struct AppearanceSettings: View {
                 }
                 ColorPicker("Custom", selection: Binding(get: { settings.accent }, set: { settings.setAccent($0) }), supportsOpacity: false).labelsHidden()
                 }
-            }
+            }.font(.body)
             Toggle("Gradient accent", isOn: $settings.gradientEnabled)
             if settings.gradientEnabled {
                 ColorPicker("Second color", selection: Binding(get: { settings.secondaryAccent }, set: { settings.setSecondaryAccent($0) }), supportsOpacity: false)
@@ -113,13 +123,13 @@ struct AppearanceSettings: View {
                     Button("Choose PNG or SVG…", action: chooseTitleImage)
                     if settings.titleImage != nil { Button("Reset") { settings.titleImage = nil } }
                 }
-            }
+            }.font(.body)
             LabeledContent("Background") {
                 HStack {
                     Button("Choose Image…", action: chooseWallpaper)
                     if settings.wallpaper != nil { Button("Remove") { settings.wallpaper = nil } }
                 }
-            }
+            }.font(.body)
             if let error { Text(error).foregroundStyle(.secondary) }
         }
     }
@@ -159,17 +169,44 @@ struct AppearanceSettings: View {
 // Set the containing AppKit window directly: resetting a SwiftUI preference to nil
 // can leave the previous explicit appearance cached until the window reactivates.
 struct WindowAppearanceBridge: NSViewRepresentable {
+    static func resolvedMode(preference: String, isPrivate: Bool) -> String {
+        isPrivate ? "Dark" : preference
+    }
     let mode: String
     func makeNSView(context: Context) -> AppearanceView { AppearanceView() }
-    func updateNSView(_ view: AppearanceView, context: Context) { view.mode = mode; view.apply() }
+    func updateNSView(_ view: AppearanceView, context: Context) { view.mode = mode; view.scheduleApply() }
     final class AppearanceView: NSView {
         var mode = "System"
-        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
-        func apply() {
-            let name: NSAppearance.Name? = mode == "Dark" ? .darkAqua : mode == "Light" ? .aqua : nil
-            guard window?.appearance?.name != name else { return }
-            window?.appearance = name.flatMap(NSAppearance.init(named:))
-            window?.contentView?.needsDisplay = true
+        private var applyScheduled = false
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); scheduleApply() }
+        func scheduleApply() {
+            guard !applyScheduled else { return }
+            applyScheduled = true
+            // Changing a window appearance invalidates its whole view hierarchy.
+            // Do this after SwiftUI reconciliation, once for the latest mode.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.applyScheduled = false
+                self.apply()
+            }
         }
+        private func apply() {
+            guard let window else { return }
+            let name: NSAppearance.Name? = mode == "Dark" ? .darkAqua : mode == "Light" ? .aqua : nil
+            guard window.appearance?.name != name else { return }
+            window.appearance = name.flatMap(NSAppearance.init(named:))
+            // AppKit invalidates appearance-dependent drawing automatically.
+        }
+    }
+}
+
+private struct ProfileAppearanceKey: EnvironmentKey {
+    static let defaultValue: Personalization? = nil
+}
+
+extension EnvironmentValues {
+    @MainActor var profileAppearance: Personalization {
+        get { self[ProfileAppearanceKey.self] ?? .shared }
+        set { self[ProfileAppearanceKey.self] = newValue }
     }
 }

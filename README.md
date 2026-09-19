@@ -2,9 +2,13 @@
   <img src="assets/origami-icon.png" width="128" height="128" alt="Origami app icon">
 </p>
 
-<h1 align="center">Origami</h1>
+<h1 align="center">Origami Browser</h1>
 
 <p align="center">The open-source browser for Mac, built for the AI era.</p>
+
+<p align="center">
+  <img src="assets/split-view.gif" alt="Origami Browser Split View demonstration">
+</p>
 
 Origami is a native macOS browser built with Swift, SwiftUI, and WebKit. It brings everyday browsing and optional AI-powered information tools into one Mac app.
 

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BookmarkPageButton: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     var iconSize: CGFloat = 11
     @State private var saved = false
@@ -24,7 +25,7 @@ struct BookmarkPageButton: View {
             Image(systemName: saved ? "star.fill" : "star")
                 .font(.system(size: iconSize)).frame(width: 20, height: 24)
         }
-        .buttonStyle(.plain).foregroundStyle(saved ? Personalization.shared.accent : Color.secondary)
+        .buttonStyle(.plain).foregroundStyle(saved ? appearance.accent : Color.secondary)
         .disabled(!canBookmark)
         .help(saved ? "Edit or Remove Bookmark" : "Bookmark This Page (⌘D)")
         .accessibilityLabel(saved ? "Edit or Remove Bookmark" : "Bookmark This Page")
@@ -66,21 +67,21 @@ struct BookmarkPageButton: View {
             guard let record = try repository.bookmark(url: address, profileID: store.session.profileID) else { return }
             bookmark = record; title = record.title; urlText = record.url; folderID = record.folderID
             folders = try repository.folders(profileID: store.session.profileID)
-            error = nil; saved = true; store.bookmarkRevision += 1; editing = true
+            error = nil; saved = true; store.bookmarksChanged(); editing = true
         } catch { store.persistenceError = error.localizedDescription }
     }
     private func save() {
         guard let bookmark, let validURL else { return }
         do {
             try store.services?.bookmarks.editDetails(bookmark.id, url: validURL, title: title, folderID: folderID, profileID: store.session.profileID)
-            store.bookmarkRevision += 1; editing = false; refresh()
+            store.bookmarksChanged(); editing = false; refresh()
         } catch { self.error = error.localizedDescription }
     }
     private func remove() {
         guard let bookmark, let url = URL(string: bookmark.url) else { return }
         do {
             try store.services?.bookmarks.removePage(url: url, profileID: store.session.profileID)
-            store.bookmarkRevision += 1; editing = false; refresh()
+            store.bookmarksChanged(); editing = false; refresh()
         } catch { self.error = error.localizedDescription }
     }
     private func refresh() {

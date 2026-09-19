@@ -3,9 +3,9 @@ import SwiftUI
 import WebKit
 
 struct QuickTools: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     var close: () -> Void
-    @State private var scripts = false
     @State private var error: String?
     @State private var output: String?
     private var page: TabPage? { store.visiblePage }
@@ -23,12 +23,17 @@ struct QuickTools: View {
                             }
                         }
                         command(page?.readerVisible == true ? "Exit Reader Mode" : "Reader Mode", "doc.text") { page?.readerVisible.toggle(); close() }.disabled(page?.article == nil)
+                        if let manager = store.services?.highlighter {
+                            command("Highlighter", "highlighter") { manager.enabled.toggle(); close() }
+                                .foregroundStyle(manager.enabled ? appearance.accent : Color.primary)
+                                .accessibilityValue(manager.enabled ? "On" : "Off")
+                        }
                         command("Find", "magnifyingglass") { close(); store.showingFind = true }
                         command("Print", "printer") { page?.webView.printOperation(with: .shared).run() }
                         command("Save PDF…", "square.and.arrow.down") { savePDF() }
                     }.disabled(page?.nativePage != nil || page == nil)
                     section("RSS") {
-                        command("RSS Feeds", "dot.radiowaves.left.and.right") { close(); store.openInternal(.feeds) }
+                        command("RSS Feeds", InternalPage.feeds.symbol) { close(); store.openInternal(.feeds) }
                         if let feeds = page?.discoveredFeeds, !feeds.isEmpty {
                             ForEach(feeds, id: \.self) { url in
                                 command(feeds.count == 1 ? "Subscribe RSS" : "Subscribe RSS · " + url.lastPathComponent, "plus") {
@@ -42,14 +47,13 @@ struct QuickTools: View {
                     }
                     section("Scripts") {
                         ForEach(ScriptRuntime.builtins) { script in command(script.name, "curlybraces") { run(script) }.disabled(page?.nativePage != nil || page == nil) }
-                        command("Manage Scripts…", "slider.horizontal.3") { scripts = true }
+                        command("Manage Scripts…", InternalPage.scripts.symbol) { close(); store.openInternal(.scripts) }
                     }
                     if let error { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
         }.padding(16).frame(width: 290, height: 480)
             .task(id: page?.currentURL) { await page?.discoverDocuments() }
-            .sheet(isPresented: $scripts) { ScriptManager(store: store) }
             .sheet(isPresented: Binding(get: { output != nil }, set: { if !$0 { output = nil } })) {
                 VStack(alignment: .leading) {
                     Text("Script Result").font(.headline)
@@ -82,29 +86,47 @@ struct QuickTools: View {
 
 struct ScriptManager: View {
     let store: BrowserStore
-    @Environment(\.dismiss) private var dismiss
     @State private var scripts: [UserScript] = []
     @State private var draft: UserScript?
     @State private var error: String?
     @State private var result: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack { Text("Scripts").font(.title2); Spacer(); Button("New Script") { draft = UserScript() }; Button("Done") { dismiss() } }
+            HStack { Text("Scripts").font(.title2.weight(.semibold)); Spacer(); Button("New Script") { draft = UserScript() } }
             Text("Scripts can read and change matching pages. Only enable code you trust. Changes apply on the next navigation.").font(.caption).foregroundStyle(.secondary)
             List {
                 ForEach(scripts) { script in
                     HStack {
                         Toggle(script.name, isOn: Binding(get: { script.enabled }, set: { enabled in var changed = script; changed.enabled = enabled; save(changed) }))
                         Spacer(); Button("Edit") { draft = script }
-                        Button("Run") { guard let page = store.visiblePage else { return }; Task { do { result = String(try await ScriptRuntime.run(script, page: page).prefix(200000)) } catch { self.error = error.localizedDescription } } }
+                        Menu("Run in Tab") {
+                            ForEach(runnableTabs) { tab in
+                                Button(tab.title) { run(script, in: tab.id) }
+                            }
+                        }.disabled(runnableTabs.isEmpty)
+                            .help("Choose an open webpage to run this script")
                         Button("Delete", role: .destructive) { perform { try store.services?.power.remove(script, profile: store.session.profileID); refreshRuntime() } }
                     }
                 }
             }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
             if let result { ScrollView { Text(result).textSelection(.enabled) }.frame(maxHeight: 100); Button("Copy Result") { copyText(result) } }
-        }.padding(20).frame(width: 660, height: 460).task { load() }
+        }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).task { load() }
             .sheet(item: $draft) { script in ScriptEditor(script: script, error: error) { save($0); if error == nil { draft = nil } } }
+    }
+    private var runnableTabs: [BrowserTab] {
+        store.session.tabs.filter { tab in
+            guard let page = store.loadedPage(for: tab.id), page.nativePage == nil,
+                  let scheme = page.currentURL?.scheme else { return false }
+            return scheme == "https" || scheme == "http"
+        }
+    }
+    private func run(_ script: UserScript, in id: UUID) {
+        guard runnableTabs.contains(where: { $0.id == id }), let page = store.loadedPage(for: id) else { return }
+        Task {
+            do { result = String(try await ScriptRuntime.run(script, page: page).prefix(200000)); error = nil }
+            catch { self.error = error.localizedDescription }
+        }
     }
     private func load() { perform { scripts = try store.services?.power.scripts(store.session.profileID) ?? [] } }
     private func save(_ script: UserScript) { perform { try store.services?.power.save(script, profile: store.session.profileID); refreshRuntime() } }
@@ -122,10 +144,10 @@ struct ScriptManager: View {
 }
 
 struct ScriptEditor: View {
+    @Environment(\.dismiss) private var dismiss
     @State var script: UserScript
     var error: String?
     var save: (UserScript) -> Void
-    @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Script name", text: $script.name)

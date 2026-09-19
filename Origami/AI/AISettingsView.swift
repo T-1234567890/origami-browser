@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AISettingsView: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     @Bindable private var settings = AISettings.shared
     @State private var credential = ""
@@ -22,7 +23,7 @@ struct AISettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(saved ? "Update API key" : "API key").font(.callout)
+                    Text(saved ? "Update API key" : "API key").font(.body)
                     HStack(spacing: 8) {
                         APIKeyField(value: $credential, revealed: showingKey).id(showingKey).frame(height: 22)
                         Button { showingKey.toggle() } label: {
@@ -45,7 +46,7 @@ struct AISettingsView: View {
                             }.disabled(busy)
                         }
                         if busy { ProgressView().controlSize(.small) }
-                    }.buttonStyle(.plain).foregroundStyle(Personalization.shared.accent)
+                    }.buttonStyle(.plain).foregroundStyle(appearance.accent)
                 }
                 if !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
                 if saved && settings.verified {
@@ -97,6 +98,8 @@ struct AISettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(24).frame(maxWidth: 680, alignment: .leading)
         }
+        .font(.body)
+        .scrollIndicators(.hidden)
         .alert("Replace API key for \(settings.provider.rawValue)?", isPresented: $confirmingUpdate) {
             Button("Cancel", role: .cancel) { }
             Button("Update Key") { saveCredential() }

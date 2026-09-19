@@ -5,10 +5,10 @@ import GRDB
 @testable import Origami
 
 @MainActor struct Phase3ABrowsingTests {
-    @Test func fileLinksDoNotOpenPeek() throws {
+    @Test func nonDocumentFileLinksDoNotOpenPeek() throws {
         let store = BrowserStore()
         defer { store.dismissPeek(); store.pages.values.forEach { $0.dispose() } }
-        for address in ["https://example.com/image.JPG", "https://example.com/file.pdf?download=1", "https://example.com/app.dmg", "https://www.google.com/imgres?imgurl=https://example.com/a"] {
+        for address in ["https://example.com/image.JPG", "https://example.com/app.dmg", "https://www.google.com/imgres?imgurl=https://example.com/a"] {
             store.openPeek(try #require(URL(string: address)))
             #expect(store.peekPage == nil)
         }

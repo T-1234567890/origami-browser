@@ -129,6 +129,38 @@ func answerFixture(_ query: String = "Question", mode: AskMode = .ask, blocks: [
         #expect(VisualPolicy.rejection(AnswerVisual(title:"V",html:"<div>Test</div>",css:"@import 'remote';",javascript:""))?.hasPrefix("css.") == true)
         #expect(VisualPolicy.rejection(AnswerVisual(title:"V",html:"<div>Test</div>",css:"",javascript:"fetch('remote')"))?.hasPrefix("javascript.") == true)
     }
+    @Test func ordinaryCallbacksAreAdmittedButDynamicCompilationIsNot() {
+        let html = "<button id=\"update\">Update</button><p id=\"value\">Ready</p>"
+        let script = "document.getElementById('update').addEventListener('click', function() { document.getElementById('value').textContent = 'Updated'; });"
+        #expect(VisualPolicy.valid(AnswerVisual(title: "Callback", html: html, css: "", javascript: script)))
+        for script in ["Function('return 1')()", "new Function ('return 1')()"] {
+            #expect(!VisualPolicy.valid(AnswerVisual(title: "Unsafe", html: html, css: "", javascript: script)))
+        }
+    }
+    @Test func interactiveVisualRendersAndRespondsWithRealWebKit() async throws {
+        var height: CGFloat = 0
+        let coordinator = VisualWebHost.Coordinator(height: Binding(get: { height }, set: { height = $0 }))
+        let host = VisualWebHost.Host()
+        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 600, height: 480), configuration: VisualPolicy.configuration())
+        host.web = web; host.addSubview(web); coordinator.host = host; coordinator.web = web
+        web.navigationDelegate = coordinator
+        defer { coordinator.dispose() }
+        let visual = AnswerVisual(title: "Interactive fixture",
+            html: "<button id=\"update\">Update</button><span id=\"value\">Ready</span>",
+            css: "",
+            javascript: "document.getElementById('update').addEventListener('click', function() { document.getElementById('value').textContent = 'Updated'; });")
+        #expect(VisualPolicy.valid(visual))
+        web.loadHTMLString(VisualPolicy.document(visual), baseURL: nil)
+        coordinator.start()
+        for _ in 0..<60 {
+            if height > 0 || coordinator.failed { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(height >= 40 && !coordinator.failed)
+        let result = try await web.evaluateJavaScript("document.getElementById('update').click(); document.getElementById('value').textContent")
+        #expect(result as? String == "Updated")
+        #expect(!coordinator.failed)
+    }
     @Test func failedVisualNeverReservesHeight() {
         var height: CGFloat = 0
         var failure = false

@@ -1,13 +1,33 @@
 import Foundation
 
 enum InternalPage: String, CaseIterable {
-    case feeds, newtab, history, bookmarks, downloads, settings, data, permissions, profiles, welcome
+    case feeds, newtab, history, bookmarks, downloads, settings, data, permissions, profiles, welcome, scripts, credits, migration
     var url: URL { URL(string: "origami://" + rawValue)! }
+    /// Shared SF Symbols for native destinations, including unloaded and pinned tabs.
+    var symbol: String {
+        switch self {
+        case .newtab: "magnifyingglass"
+        case .history: "clock"
+        case .bookmarks: "book"
+        case .downloads: "arrow.down.circle"
+        case .settings: "gearshape"
+        case .feeds: "dot.radiowaves.left.and.right"
+        case .data: "externaldrive"
+        case .permissions: "hand.raised"
+        case .profiles: "person.crop.circle"
+        case .welcome: "hand.wave"
+        case .scripts: "curlybraces"
+        case .credits: "text.book.closed"
+        case .migration: "square.and.arrow.down"
+        }
+    }
     var title: String {
         switch self {
         case .feeds: return "Websites I Follow"
         case .newtab: return "New Tab"
         case .data: return "Website Data"
+        case .credits: return "Credits & Licenses"
+        case .migration: return "Import Browser Data"
         default: return rawValue.capitalized
         }
     }

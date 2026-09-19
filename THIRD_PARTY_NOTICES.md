@@ -159,3 +159,15 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
 ```
+
+## EasyList and EasyPrivacy (optional downloaded data)
+
+Attribution: **The EasyList authors** — https://easylist.to/.
+
+Official sources:
+- https://easylist.to/easylist/easylist.txt
+- https://easylist.to/easylist/easyprivacy.txt
+
+Origami uses the **Creative Commons Attribution-ShareAlike 3.0 Unported or later** licensing option described at https://easylist.to/pages/licence.html. License: https://creativecommons.org/licenses/by-sa/3.0/ (legal text: https://creativecommons.org/licenses/by-sa/3.0/legalcode).
+
+These lists are downloaded only after Ad Blocking is enabled. They are not bundled or distributed in Origami’s source repository or app. Origami converts a supported subset of their network filters into WebKit rules locally; this is a modification, and the converted data remains subject to CC BY-SA 3.0-or-later. The original data, conversion, and attribution are stored together locally. No endorsement by the EasyList authors is implied. Origami’s implementation code remains MPL-2.0; that license does not replace the downloaded data’s license.

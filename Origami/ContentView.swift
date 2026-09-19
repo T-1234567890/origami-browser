@@ -16,7 +16,7 @@ struct ContentView: View {
     private var sidebarInteraction: Bool { editingOmnibox || resizingSidebar || sidebarPopover || windowState.showingPreferences }
     private var showsBookmarks: Bool { _ = store.preferencesRevision; return store.preferences.showBookmarkBar }
     private var remoteSuggestionsAllowed: Bool { _ = store.preferencesRevision; return store.preferences.allowsRemoteSuggestions(isPrivate: store.isPrivate) }
-    private var showsContentFrame: Bool { _ = store.preferencesRevision; return Personalization.shared.frame != "Off" || (vertical && Personalization.shared.frameFill) }
+    private var showsContentFrame: Bool { _ = store.preferencesRevision; return store.appearance.frame != "Off" || (vertical && store.appearance.frameFill) }
     private var onboarding: Bool { store.isShowingWelcome }
     private var vertical: Bool { store.session.layout == .vertical }
 
@@ -101,8 +101,8 @@ struct ContentView: View {
             // Extend only the backdrop under the titlebar. AppKit owns the window's corner clipping.
             ZStack {
                 BrowserChromeBackground()
-                if !onboarding && vertical && Personalization.shared.frameFill {
-                    Personalization.shared.accentFill.opacity(0.4)
+                if !onboarding && vertical && store.appearance.frameFill {
+                    store.appearance.accentFill.opacity(0.4)
                 }
             }.ignoresSafeArea().allowsHitTesting(false)
         }
@@ -111,8 +111,10 @@ struct ContentView: View {
 
     var body: some View {
         contentSurface
-        .tint(Personalization.shared.accent)
-        .background(WindowAppearanceBridge(mode: Personalization.shared.mode))
+        .environment(\.profileAppearance, store.appearance)
+        .tint(store.appearance.accent)
+        .preferredColorScheme(store.isPrivate ? .dark : nil)
+        .background(WindowAppearanceBridge(mode: WindowAppearanceBridge.resolvedMode(preference: store.appearance.mode, isPrivate: store.isPrivate)))
         .windowToolbarFullScreenVisibility(.visible)
         .toolbar(windowState.isFullScreen ? .hidden : .automatic, for: .windowToolbar)
         .toolbar(removing: .title)
@@ -146,9 +148,6 @@ struct ContentView: View {
                     ToolbarItem(placement: .automatic) { BrowserLibraryControls(store: store, toolbar: true) }
                 }
             }
-        }
-        .onChange(of: store.session.tabs.isEmpty) { wasEmpty, isEmpty in
-            if !wasEmpty && isEmpty { windowState.window?.performClose(nil) }
         }
         .onChange(of: store.session.selectedTabID) {
             store.resolveConfirmation(false)
@@ -242,7 +241,7 @@ struct ContentView: View {
     private var addressField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            Omnibox(store: store, allowRemote: remoteSuggestionsAllowed, tabID: store.session.selectedTabID, value: store.selectedTab?.url?.absoluteString ?? "", focusRequest: store.focusRequest, canFocus: !vertical || sidebarShown, suggestionAnchor: suggestionAnchor, editingChanged: { editingOmnibox = $0 }) {
+            Omnibox(store: store, allowRemote: remoteSuggestionsAllowed, tabID: store.session.selectedTabID, value: store.selectedTab?.url?.absoluteString ?? "", focusRequest: store.focusRequest, connectionWarning: store.visiblePage?.connectionSecurity.warning == true, canFocus: !vertical || sidebarShown, suggestionAnchor: suggestionAnchor, editingChanged: { editingOmnibox = $0 }) {
                 store.navigate($0, searchOnly: $1)
             }.frame(height: 18)
             if !vertical { BookmarkPageButton(store: store) }
@@ -304,6 +303,8 @@ struct BrowserContentView: View {
                     JSONReaderView(raw: json, details: page.responseDetails) { page.showsJSON = false }
                 } else {
                     WebViewContainer(webView: page.webView, dismissDialog: page.dismissDialog, activated: { if store.session.activeSplit != nil { store.select(tab.id) } })
+                        .overlay { WebHighlighterToolbar(controller: page.highlighter) }
+                        .task(id: page.currentURL) { page.highlighter.refresh() }
                         .overlay(alignment: .topTrailing) {
                             if page.jsonText != nil && !page.showsJSON {
                                 Button { page.showsJSON = true } label: {

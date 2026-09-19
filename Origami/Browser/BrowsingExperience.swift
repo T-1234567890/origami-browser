@@ -27,9 +27,16 @@ extension BrowserStore {
         select(id)
     }
 
+    func setPeekMode(_ mode: PeekMode) {
+        preferences.peekMode = mode
+        for store in application.map({ Array($0.stores.values) }) ?? [self] {
+            store.peekMode = mode
+            if mode == .off { store.dismissPeek() }
+        }
+    }
     func openPeek(_ url: URL) {
         dismissPeek()
-        guard LinkPeekObserver.canPreview(url) else { return }
+        guard peekMode != .off, LinkPeekObserver.canPreview(url) else { return }
         let size = visiblePage?.webView.bounds.size ?? .zero
         peekViewport = size.width > 0 && size.height > 0 ? size : CGSize(width: 1200, height: 900)
         let page = TabPage(services: services, profileID: session.profileID)
@@ -37,11 +44,10 @@ extension BrowserStore {
         page.openPeek = { [weak self] in self?.openPeek($0) }
         page.openTab = { [weak self] in self?.newTab(url: $0.url) }
         page.isPassivePreview = true
-        page.previewUnavailable = { [weak self, weak page] in
-            DispatchQueue.main.async { if let page, self?.peekPage === page { self?.dismissPeek() } }
-        }
-        peekPage = page
-        page.load(url)
+        // A non-HTML response stays as a metadata card; never initiate a download.
+        page.previewUnavailable = { }
+        peekPage = page; peekURL = url
+        if PeekPreview.documentType(url) == nil { page.load(url) }
     }
     func deferPeekDismissal() {
         let id = peekPage?.tabID
@@ -50,14 +56,17 @@ extension BrowserStore {
         // Allow the pointer to cross from the source link into the preview controls.
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
-            guard let self, self.peekPage?.tabID == id, self.peekDismissGeneration == generation, !self.peekInteracting else { return }
+            guard let self, self.peekPage?.tabID == id, self.peekDismissGeneration == generation, !self.peekInteracting, !self.peekSwiping else { return }
             self.dismissPeek()
         }
     }
-    func dismissPeek() { peekDismissGeneration = UUID(); peekInteracting = false; peekPage?.dispose(); peekPage = nil; peekSourceID = nil; peekLinkBounds = nil }
+    func dismissPeek() { peekDismissGeneration = UUID(); peekInteracting = false; peekSwiping = false; peekPage?.dispose(); peekPage = nil; peekURL = nil; peekSourceID = nil; peekLinkBounds = nil }
     func promotePeek() {
         guard let page = peekPage else { return }
-        peekPage = nil
+        if let url = peekURL, PeekPreview.documentType(url) != nil || PeekPreview.documentType(mime: page.responseDetails?.mime) != nil {
+            dismissPeek(); newTab(url: url); return
+        }
+        peekPage = nil; peekURL = nil
         page.isPassivePreview = false; page.previewUnavailable = nil
         session.tabs.append(BrowserTab(id: page.tabID, url: page.currentURL, title: page.pageTitle ?? "New Tab"))
         pages[page.tabID] = page

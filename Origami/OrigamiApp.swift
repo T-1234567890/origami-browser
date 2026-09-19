@@ -20,13 +20,14 @@ struct OrigamiApp: App {
         .restorationBehavior(.disabled)
         .defaultSize(width: 1200, height: 800)
         .windowToolbarStyle(.unifiedCompact)
-        .commands { BrowserCommands(application: application); UpdateCommands() }
+        .commands { BrowserCommands(application: application); UpdateCommands(application: application) }
     }
 }
 
 private struct BrowserWindowRoot: View {
     let application: BrowserApplicationContext
     @Binding var identity: UUID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var initialStore: BrowserStore
     private var store: BrowserStore { state.profileStore ?? initialStore }
     @State private var state = BrowserWindowState()
@@ -36,8 +37,12 @@ private struct BrowserWindowRoot: View {
         _initialStore = State(initialValue: application.resolve(identity.wrappedValue))
     }
     var body: some View {
-        ContentView(store: store, windowState: state)
-            .id(store.session.windowID)
+        ZStack {
+            ContentView(store: store, windowState: state)
+                .id(store.session.windowID)
+                .transition(.opacity)
+        }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: store.session.profileID)
             .background(BrowserWindowReader(state: state, layout: store.session.layout, savedFrame: store.session.windowFrame, onboarding: store.isShowingWelcome))
             .task(id: store.session.windowID) {
                 identity = store.session.windowID
@@ -49,11 +54,7 @@ private struct BrowserWindowRoot: View {
             }
             .onChange(of: store.session.tabs.isEmpty, initial: true) { _, empty in
                 guard empty else { return }
-                // Finish tab persistence and view updates before using the normal window-close path.
-                DispatchQueue.main.async {
-                    guard store.session.tabs.isEmpty else { return }
-                    state.window?.performClose(nil)
-                }
+                state.closeIfEmpty(store)
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
                 state.refreshFocus()

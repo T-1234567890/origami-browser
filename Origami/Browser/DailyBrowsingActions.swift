@@ -10,7 +10,7 @@ extension BrowserStore {
     func toggleBookmarkBar() { preferences.showBookmarkBar.toggle(); preferencesRevision += 1 }
     func bookmarkCurrentTab() {
         guard let tab = selectedTab, let url = tab.url, let services else { return }
-        do { _ = try services.bookmarks.addUnique(url: url, title: tab.title, profileID: session.profileID); bookmarkRevision += 1 }
+        do { _ = try services.bookmarks.addUnique(url: url, title: tab.title, profileID: session.profileID); bookmarksChanged() }
         catch { persistenceError = error.localizedDescription }
     }
     func bookmarkTabs(_ tabs: [BrowserTab], name: String) {
@@ -18,7 +18,7 @@ extension BrowserStore {
         do {
             let folder = try services.bookmarks.createFolder(title: name, profileID: session.profileID)
             for tab in tabs { if let url = tab.url, PersistedURL.clean(url) != nil { _ = try services.bookmarks.addUnique(url: url, title: tab.title, folderID: folder, profileID: session.profileID) } }
-            bookmarkRevision += 1
+            bookmarksChanged()
         } catch { persistenceError = error.localizedDescription }
     }
     func openFolder(_ id: UUID, grouped: Bool = false) throws {

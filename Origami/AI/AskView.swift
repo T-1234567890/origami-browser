@@ -3,6 +3,7 @@ import WebKit
 import MarkdownUI
 
 struct AskSurface: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     let tabID: UUID
     let returnToSearch: () -> Void
@@ -27,7 +28,7 @@ struct AskSurface: View {
                     if event.id != root.id {
                         Divider()
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(event.query).font(.system(size: 19, weight: .medium, design: .serif)).foregroundStyle(Personalization.shared.accent).textSelection(.enabled)
+                            Text(event.query).font(.system(size: 19, weight: .medium, design: .serif)).foregroundStyle(appearance.accent).textSelection(.enabled)
                             FollowUpVersionControl(event: event, store: store, tabID: tabID, model: selectedModel.isEmpty ? event.model : selectedModel).disabled(loading)
                         }
                     }
@@ -131,6 +132,7 @@ struct AskSurface: View {
 }
 
 private struct AnswerBlockView: View {
+    @Environment(\.profileAppearance) private var appearance
     let block: AIBlock
     let event: AISearchEvent
     let store: BrowserStore
@@ -155,7 +157,7 @@ private struct AnswerBlockView: View {
                 HStack {
                     ForEach(block.sourceURLs, id: \.self) { url in
                         if let index = event.sources.firstIndex(where: { $0.url == url }) {
-                            Button("[\(index + 1)]") { if let url = AISource.safeURL(url) { store.newTab(url: url) } }.buttonStyle(.plain).font(.caption).foregroundStyle(Personalization.shared.accent).help(event.sources[index].title)
+                            Button("[\(index + 1)]") { if let url = AISource.safeURL(url) { store.newTab(url: url) } }.buttonStyle(.plain).font(.caption).foregroundStyle(appearance.accent).help(event.sources[index].title)
                         }
                     }
                 }.accessibilityLabel("Supporting sources")

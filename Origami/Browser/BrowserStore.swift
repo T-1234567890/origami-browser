@@ -24,7 +24,10 @@ final class BrowserStore {
     var peekSourceID: UUID?
     var peekDismissGeneration = UUID()
     var peekInteracting = false
+    var peekSwiping = false
     var peekPage: TabPage?
+    var peekURL: URL?
+    var peekMode: PeekMode = .onDemand
     var persistenceError: String?
     var confirmationMessage: String?
     @ObservationIgnored var confirmationContinuation: CheckedContinuation<Bool, Never>?
@@ -58,6 +61,7 @@ final class BrowserStore {
         }
         initial.normalize()
         self.session = initial
+        self.peekMode = self.preferences.peekMode
         do {
             let database = try persistence?.database ?? DatabaseManager()
             let initializedServices = try sharedServices ?? BrowserServices(database: database)
@@ -69,7 +73,25 @@ final class BrowserStore {
             services = nil
             persistenceError = "Browser storage is unavailable. Existing data has not been replaced. \(error.localizedDescription)"
         }
+        applyProfileLayout()
         if sharedServices == nil { services?.downloads.onError = { [weak self] in self?.persistenceError = $0 } }
+    }
+    var appearance: Personalization {
+        _ = application?.profileRevision
+        let scope = (try? services?.profiles.scope(session.profileID, .appearance)) ?? session.profileID
+        return preferences.appearance(for: scope)
+    }
+    func bookmarksChanged() {
+        let scope = try? services.map { try ProfileRepository($0.bookmarks.database).scope(session.profileID, .bookmarks) }
+        bookmarkRevision += 1
+        for store in application?.stores.values ?? Dictionary<UUID, BrowserStore>().values where store !== self {
+            let other = try? store.services.map { try ProfileRepository($0.bookmarks.database).scope(store.session.profileID, .bookmarks) }
+            if scope == other { store.bookmarkRevision += 1 }
+        }
+    }
+    func applyProfileLayout() {
+        let scope = (try? services?.profiles.scope(session.profileID, .layout)) ?? session.profileID
+        session.layout = scope == BrowserProfile.defaultID ? preferences.layout : preferences.profileLayout(scope)
     }
     var profilePinCount: Int {
         guard !isPrivate, let application else { return session.tabs.filter(\.isPinned).count }
@@ -112,9 +134,10 @@ final class BrowserStore {
         page.openPeek = { [weak self] url in self?.openPeek(url) }
         page.linkPeekObserver.changed = { [weak self, weak page] url, point in
             guard let self, let page, page.nativePage == nil, self.session.selectedTabID == page.tabID else { return }
+            guard !self.peekInteracting, !self.peekSwiping else { return }
             guard let url else { if self.peekSourceID == page.tabID { self.deferPeekDismissal() }; return }
             self.peekDismissGeneration = UUID()
-            if self.peekPage?.currentURL != url { self.openPeek(url) }
+            if self.peekURL != url { self.openPeek(url) }
             self.peekLinkBounds = page.linkPeekObserver.linkBounds
             let size = page.webView.bounds.size
             if size.width > 0 && size.height > 0 { self.peekViewport = size }
@@ -172,6 +195,7 @@ final class BrowserStore {
         }
         session.normalize()
         save()
+        if session.tabs.isEmpty { application?.states[session.windowID]?.closeIfEmpty(self) }
     }
     func reopenClosedTab() {
         guard var closed = recentlyClosed.popLast() else { return }
@@ -339,7 +363,16 @@ final class BrowserStore {
     func focusOmnibox() {
         focusRequest = UUID()
     }
-    func setLayout(_ layout: TabLayout) { session.layout = layout; preferences.layout = layout; save() }
+    func setLayout(_ layout: TabLayout) {
+        let scope = (try? services?.profiles.scope(session.profileID, .layout)) ?? session.profileID
+        if scope == BrowserProfile.defaultID { preferences.layout = layout }
+        else { preferences.setProfileLayout(layout, for: scope) }
+        session.layout = layout
+        for store in application?.stores.values ?? Dictionary<UUID, BrowserStore>().values {
+            store.applyProfileLayout(); store.save()
+        }
+        save()
+    }
     func setSearchEngine(_ engine: SearchEngine) {
         preferences.searchEngine = engine
         for store in application.map({ Array($0.stores.values) }) ?? [self] { store.session.searchEngine = engine; store.save() }

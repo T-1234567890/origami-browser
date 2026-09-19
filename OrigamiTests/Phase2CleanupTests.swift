@@ -5,6 +5,54 @@ import GRDB
 @testable import Origami
 
 @MainActor struct Phase2CleanupTests {
+    @Test func deletingUnusedProfileKeepsCurrentWindowAndTabs() async throws {
+        let app = BrowserApplicationContext(isolated: true)
+        defer { for id in Array(app.stores.keys) { app.close(id) } }
+        let services = try #require(app.services)
+        let work = try services.profiles.create(name: "Work", color: .blue)
+        let unused = try services.profiles.create(name: "Unused", color: .green)
+        let current = try app.switchProfile(work.id, in: app.resolve(nil))
+        let tabs = current.session.tabs.map(\.id)
+        let selected = current.session.selectedTabID
+        var opened = 0
+        app.openWindow = { _ in opened += 1 }
+        try await app.deleteProfile(unused.id)
+        #expect(opened == 0)
+        #expect(app.stores.count == 1 && app.activeStore === current)
+        #expect(current.session.tabs.map(\.id) == tabs)
+        #expect(current.session.selectedTabID == selected)
+        #expect(try !services.profiles.list().contains { $0.id == unused.id })
+    }
+
+    @Test func deletingOpenProfileKeepsSurvivingWindow() async throws {
+        let app = BrowserApplicationContext(isolated: true)
+        defer { for id in Array(app.stores.keys) { app.close(id) } }
+        let services = try #require(app.services)
+        let survivor = app.resolve(nil)
+        let tabs = survivor.session.tabs.map(\.id)
+        let work = try services.profiles.create(name: "Work", color: .blue)
+        _ = try app.switchProfile(work.id)
+        var opened = 0
+        app.openWindow = { _ in opened += 1 }
+        try await app.deleteProfile(work.id)
+        #expect(opened == 0)
+        #expect(app.stores.count == 1 && app.activeStore === survivor)
+        #expect(survivor.session.tabs.map(\.id) == tabs)
+    }
+
+    @Test func deletingLastOpenProfileProvidesOneFallbackWindow() async throws {
+        let app = BrowserApplicationContext(isolated: true)
+        defer { for id in Array(app.stores.keys) { app.close(id) } }
+        let services = try #require(app.services)
+        let work = try services.profiles.create(name: "Work", color: .blue)
+        _ = try app.switchProfile(work.id, in: app.resolve(nil))
+        var opened = 0
+        app.openWindow = { _ in opened += 1 }
+        try await app.deleteProfile(work.id)
+        #expect(opened == 1 && app.stores.count == 1)
+        #expect(app.activeStore?.session.profileID == BrowserProfile.defaultID)
+    }
+
     @Test func profileMigrationCRUDAndColorPersistence() throws {
         let db = try DatabaseManager(migrate: false)
         try Migrations.make().migrate(db.queue, upTo: "v9_group_appearance")

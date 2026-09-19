@@ -15,19 +15,22 @@ struct BrowserLibraryControls: View {
     @State private var downloadsVisible = false
     var body: some View {
         HStack(spacing: toolbar ? 4 : 12) {
-            Button { siteVisible.toggle() } label: { icon("info.circle") }
+            Button { siteVisible.toggle() } label: {
+                let state = store.selectedPage?.connectionSecurity ?? .local
+                icon(state.symbol).foregroundStyle(state.warning ? Color.red : Color.secondary)
+            }
                 .help("Site Information").accessibilityLabel("Site Information")
                 .popover(isPresented: $siteVisible) { SiteInformation(store: store) }
-            Button { bookmarksVisible.toggle() } label: { icon("book") }
+            Button { bookmarksVisible.toggle() } label: { icon(InternalPage.bookmarks.symbol) }
                 .help("Bookmarks").accessibilityLabel("Bookmarks")
                 .popover(isPresented: $bookmarksVisible) { BookmarksPopover(store: store) }
             Button { downloadsVisible.toggle() } label: {
                 Group {
                     if store.services?.downloads.runningProfiles.contains(store.session.profileID) == true && !reduceMotion {
-                        Image(systemName: "arrow.down.circle")
+                        Image(systemName: InternalPage.downloads.symbol)
                             .symbolEffect(.bounce.down.byLayer, options: .repeating.speed(0.5), isActive: true)
                     } else {
-                        Image(systemName: "arrow.down.circle")
+                        Image(systemName: InternalPage.downloads.symbol)
                     }
                 }.frame(width: 24, height: 24).contentShape(Rectangle())
             }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SuggestionList: View {
+    @Environment(\.profileAppearance) private var appearance
     let engine: SuggestionEngine
     let store: BrowserStore
     let activate: (Suggestion) -> Void
@@ -22,7 +23,7 @@ struct SuggestionList: View {
                                 Spacer(minLength: 0)
                                 if suggestion.kind == .bookmark { Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(.secondary) }
                             }.padding(.horizontal, 9).frame(height: 38).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(engine.selectedID == suggestion.id ? Personalization.shared.accent.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                                .background(engine.selectedID == suggestion.id ? appearance.accent.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 6))
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain).id(suggestion.id)
                             .transition(.opacity)

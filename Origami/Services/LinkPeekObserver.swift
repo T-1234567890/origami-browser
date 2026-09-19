@@ -5,10 +5,33 @@ import WebKit
     var changed: ((URL?, CGPoint) -> Void)?
     static func canPreview(_ url: URL) -> Bool {
         guard ["http", "https"].contains(url.scheme?.lowercased()) else { return false }
+        guard url.user == nil, url.password == nil else { return false }
+        if isVideoLink(url) { return false }
+        if PeekPreview.documentType(url) != nil { return true }
         let files = Set("pdf zip gz tar dmg pkg exe msi doc docx xls xlsx ppt pptx csv txt json xml rss atom png jpg jpeg gif webp svg avif ico mp3 mp4 mov webm wav ogg woff woff2 ttf".split(separator: " ").map(String.init))
         if files.contains(url.pathExtension.lowercased()) { return false }
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         return url.path != "/imgres" && !query.contains { $0.name == "imgurl" }
+    }
+    static func isVideoLink(_ url: URL, unwrap: Bool = true) -> Bool {
+        let host = url.host?.lowercased() ?? ""
+        func site(_ domain: String) -> Bool { host == domain || host.hasSuffix("." + domain) }
+        let path = url.path.lowercased()
+        if ["mp4", "m4v", "mov", "webm", "avi", "mkv", "m3u8", "mpd"].contains(url.pathExtension.lowercased()) { return true }
+        if site("youtu.be") || site("tiktok.com") { return true }
+        if site("youtube.com") || site("youtube-nocookie.com") {
+            if path == "/watch" || ["/shorts/", "/embed/", "/live/", "/v/"].contains(where: path.hasPrefix) { return true }
+        }
+        if site("vimeo.com"), url.pathComponents.contains(where: { !$0.isEmpty && $0.allSatisfy(\.isNumber) }) { return true }
+        if site("dailymotion.com"), path.hasPrefix("/video/") { return true }
+        if unwrap, path == "/url" || path == "/redirect" {
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            return items.contains { item in
+                guard ["q", "url", "target"].contains(item.name), let value = item.value, let target = URL(string: value) else { return false }
+                return isVideoLink(target, unwrap: false)
+            }
+        }
+        return false
     }
     static let world = WKContentWorld.world(name: "Origami.LinkHover")
     static let source = """
@@ -25,7 +48,7 @@ import WebKit
         if (/(pagination|pager|social|share|footer|breadcrumb)/i.test(String(link.className)+' '+link.id+' '+String(link.parentElement?.className))) return;
         if (/^(next|previous|prev|back|more|sign in|log in|\\d+)$/i.test(link.textContent.trim()) || /next|prev/.test(link.rel)) return;
         const target = new URL(link.href);
-        if (/\\.(pdf|zip|gz|tar|dmg|pkg|exe|msi|docx?|xlsx?|pptx?|csv|txt|json|xml|rss|atom|png|jpe?g|gif|webp|svg|avif|ico|mp[34]|mov|webm|wav|ogg|woff2?|ttf)$/i.test(target.pathname) || /^(image|audio|video)\\//i.test(link.type)) return;
+        if (/\\.(zip|gz|tar|dmg|pkg|exe|msi|csv|txt|json|xml|rss|atom|png|jpe?g|gif|webp|svg|avif|ico|mp[34]|mov|webm|wav|ogg|woff2?|ttf)$/i.test(target.pathname) || /^(image|audio|video)\\//i.test(link.type)) return;
         if (target.searchParams.has('imgurl') || target.pathname === '/imgres') return;
         if (target.origin === location.origin && (target.pathname === location.pathname || target.searchParams.has('page') || target.searchParams.has('start'))) return;
         if (/(^|\\.)(facebook\\.com|instagram\\.com|twitter\\.com|x\\.com|tiktok\\.com|linkedin\\.com|whatsapp\\.com|t\\.me)$/.test(target.hostname)) return;

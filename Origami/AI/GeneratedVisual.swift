@@ -12,7 +12,12 @@ enum VisualPolicy {
         if value.javascript.utf8.count > 24_000 { return "javascript.size_limit" }
         let css = value.css.lowercased(), js = value.javascript.lowercased()
         for token in ["url", "@import", "\\", "expression", "</style"] where css.contains(token) { return "css.disallowed_token: " + token }
-        for token in ["</script", "eval(", "function(", "while", "for(", "for (", "webkit", "messagehandlers", "fetch", "xmlhttprequest", "websocket", "worker", "webassembly", "window.open", "localstorage", "indexeddb", "document.cookie", "import("] where js.contains(token) { return "javascript.disallowed_token: " + token }
+        for token in ["</script", "eval(", "while", "for(", "for (", "webkit", "messagehandlers", "fetch", "xmlhttprequest", "websocket", "worker", "webassembly", "window.open", "localstorage", "indexeddb", "document.cookie", "import("] where js.contains(token) { return "javascript.disallowed_token: " + token }
+        // Ordinary anonymous callbacks are valid. Dynamic compilation remains blocked
+        // both here and by the CSP (which does not allow unsafe-eval).
+        if value.javascript.range(of: #"\bFunction\s*\("#, options: .regularExpression) != nil {
+            return "javascript.dynamic_function"
+        }
         // Keyword checks also catch comments/newlines between a loop keyword and
         // its condition. This is admission defense, not a CPU-time guarantee.
         if js.range(of: #"\b(for|while|do)\b"#, options: .regularExpression) != nil { return "javascript.loop_keyword" }
@@ -24,7 +29,7 @@ enum VisualPolicy {
     static func document(_ visual: AnswerVisual) -> String {
         let nonce = UUID().uuidString
         let csp = "default-src 'none'; script-src 'nonce-\(nonce)'; style-src 'nonce-\(nonce)'; connect-src 'none'; img-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'; media-src 'none'"
-        let html = "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"\(csp)\"><style nonce=\"\(nonce)\">:root{color-scheme:light dark}body{margin:0;font:14px system-ui;overflow:hidden}*{box-sizing:border-box}#visual{max-height:480px;overflow:hidden}\(visual.css)</style></head><body><div id=\"visual\">\(visual.html)</div><script nonce=\"\(nonce)\">'use strict';\n\(visual.javascript)</script></body></html>"
+        let html = "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"\(csp)\"><style nonce=\"\(nonce)\">:root{color-scheme:light dark}body{margin:0;font:14px system-ui;overflow:hidden}*{box-sizing:border-box}#visual{min-height:40px;max-height:480px;overflow:hidden;display:flow-root}\(visual.css)</style></head><body><div id=\"visual\">\(visual.html)</div><script nonce=\"\(nonce)\">'use strict';\n\(visual.javascript)</script></body></html>"
         return html
     }
     static func configuration() -> WKWebViewConfiguration {

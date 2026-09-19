@@ -54,6 +54,8 @@ struct UpdatesSettings: View {
 }
 
 struct AboutSettings: View {
+    let store: BrowserStore
+    @State private var showingSupport = false
     private let identity = ReleaseIdentity.from(info: Bundle.main.infoDictionary ?? [:])
     private var version: String {
         if let identity { return String(identity.displayVersion.dropFirst("Origami ".count)) }
@@ -63,8 +65,8 @@ struct AboutSettings: View {
     var body: some View {
         Section("About") {
             HStack(spacing: 16) {
-                if let icon = NSApplication.shared.applicationIconImage {
-                    Image(nsImage: icon)
+                Group {
+                    Image("AboutIcon")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 64, height: 64)
@@ -80,13 +82,34 @@ struct AboutSettings: View {
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 8)
+            HStack(spacing: 12) {
+                Button("About Origami…") { AboutOrigamiWindow.shared.present { [weak store, weak application = store.application] url in
+                    let target = store ?? application?.activeStore ?? application?.newWindow()
+                    target?.newTab(url: url); target?.nativeWindow?.makeKeyAndOrderFront(nil)
+                } }
+                Button("Feedback & Support") { showingSupport.toggle() }
+                    .popover(isPresented: $showingSupport, arrowEdge: .bottom) {
+                        FeedbackSupportPopover { url in
+                            showingSupport = false
+                            store.newTab(url: url)
+                            store.nativeWindow?.makeKeyAndOrderFront(nil)
+                        }
+                    }
+            }
         }
     }
 }
 
 struct UpdateCommands: Commands {
+    let application: BrowserApplicationContext
     @ObservedObject private var updates = UpdateService.shared
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About Origami") { AboutOrigamiWindow.shared.present { url in
+                let store = application.activeStore ?? application.newWindow()
+                store.newTab(url: url); store.nativeWindow?.makeKeyAndOrderFront(nil)
+            } }
+        }
         CommandGroup(after: .appInfo) {
             Button("Check for Updates…") { updates.check() }.disabled(!updates.available || !updates.canCheck)
         }

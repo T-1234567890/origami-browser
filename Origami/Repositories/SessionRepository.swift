@@ -55,7 +55,7 @@ final class SessionRepository {
             try write(target, recentlyClosed: targetClosed, in: db)
         }
     }
-    private func write(_ session: BrowserSession, recentlyClosed: [(tab: BrowserTab, index: Int)], in db: Database) throws {
+    func write(_ session: BrowserSession, recentlyClosed: [(tab: BrowserTab, index: Int)], in db: Database) throws {
         try db.execute(sql: "INSERT INTO browser_sessions VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at", arguments: [session.id.uuidString, session.profileID.uuidString, Date().timeIntervalSince1970])
         try db.execute(sql: "INSERT INTO windows(id,session_id,selected_tab_id,frame) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET selected_tab_id=excluded.selected_tab_id,frame=excluded.frame,closed_at=NULL", arguments: [session.windowID.uuidString, session.id.uuidString, session.selectedTabID?.uuidString, session.windowFrame])
         try db.execute(sql: "UPDATE windows SET split_left=?,split_right=? WHERE id=?", arguments: [session.split?.left.uuidString, session.split?.right.uuidString, session.windowID.uuidString])

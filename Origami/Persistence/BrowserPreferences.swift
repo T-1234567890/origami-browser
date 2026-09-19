@@ -8,6 +8,37 @@ final class BrowserPreferences {
     private func set(_ value: Any, _ key: String) {
         if let defaults { defaults.set(value, forKey: "browser." + key) } else { values[key] = value }
     }
+    var hasPersistentStorage: Bool { defaults != nil }
+    var httpsFirst: Bool {
+        get { value("httpsFirst") as? Bool ?? true }
+        set { set(newValue, "httpsFirst") }
+    }
+    var contentBlockingDomains: [String] {
+        get { value("contentBlockingDomains") as? [String] ?? [] }
+        set { set(newValue, "contentBlockingDomains") }
+    }
+    var contentBlocking: Bool {
+        get { value("contentBlocking") as? Bool ?? false }
+        set { set(newValue, "contentBlocking") }
+    }
+    var adBlocking: Bool {
+        get { value("adBlocking") as? Bool ?? false }
+        set { set(newValue, "adBlocking") }
+    }
+    func blockingExceptions(_ kind: BlockingKind) -> [String] { value("blockingExceptions." + kind.rawValue) as? [String] ?? [] }
+    func setBlockingExceptions(_ hosts: [String], kind: BlockingKind) { set(hosts, "blockingExceptions." + kind.rawValue) }
+    var highlighterEnabled: Bool {
+        get { value("highlighterEnabled") as? Bool ?? false }
+        set { set(newValue, "highlighterEnabled") }
+    }
+    var highlightStyle: HighlightStyle {
+        get { (value("highlightStyle") as? String).flatMap(HighlightStyle.init(rawValue:)) ?? .yellow }
+        set { set(newValue.rawValue, "highlightStyle") }
+    }
+    var peekMode: PeekMode {
+        get { (value("peekMode") as? String).flatMap(PeekMode.init(rawValue:)) ?? .onDemand }
+        set { set(newValue.rawValue, "peekMode") }
+    }
     var historyRetentionDays: Int {
         get { let days = value("historyRetentionDays") as? Int ?? 90; return [30, 90, 180, 365, 0].contains(days) ? days : 90 }
         set { if [30, 90, 180, 365, 0].contains(newValue) { set(newValue, "historyRetentionDays") } }
@@ -80,6 +111,32 @@ final class BrowserPreferences {
     var currentProfileID: UUID {
         get { (value("profile") as? String).flatMap(UUID.init(uuidString:)) ?? BrowserProfile.defaultID }
         set { set(newValue.uuidString, "profile") }
+    }
+    private var appearances: [UUID: Personalization] = [:]
+    private let transientAppearanceDomain = "Origami.TransientAppearance." + UUID().uuidString
+    deinit { if defaults == nil { UserDefaults.standard.removePersistentDomain(forName: transientAppearanceDomain) } }
+    @MainActor func appearance(for id: UUID) -> Personalization {
+        if id == BrowserProfile.defaultID, defaults === UserDefaults.standard { return .shared }
+        if let existing = appearances[id] { return existing }
+        let result = Personalization(defaults: defaults ?? UserDefaults(suiteName: transientAppearanceDomain)!,
+            prefix: id == BrowserProfile.defaultID ? "" : "profile." + id.uuidString + ".")
+        appearances[id] = result
+        return result
+    }
+    @MainActor func removeProfilePreferences(_ id: UUID) {
+        appearances.removeValue(forKey: id)
+        let prefix = "profile." + id.uuidString + "."
+        let storage = defaults ?? UserDefaults(suiteName: transientAppearanceDomain)!
+        for key in storage.dictionaryRepresentation().keys where key.hasPrefix(prefix) { storage.removeObject(forKey: key) }
+        defaults?.removeObject(forKey: "browser.layout." + id.uuidString)
+        values.removeValue(forKey: "layout." + id.uuidString)
+    }
+    func profileLayout(_ id: UUID) -> TabLayout {
+        if value("layout." + id.uuidString) == nil { setProfileLayout(layout, for: id) }
+        return (value("layout." + id.uuidString) as? String).flatMap(TabLayout.init(rawValue:)) ?? layout
+    }
+    func setProfileLayout(_ layout: TabLayout, for id: UUID) {
+        set(layout.rawValue, "layout." + id.uuidString)
     }
     var layout: TabLayout {
         get { (value("layout") as? String).flatMap(TabLayout.init(rawValue:)) ?? .horizontal }

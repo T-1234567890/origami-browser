@@ -39,6 +39,9 @@ struct NativeInternalSurface: View {
             case .permissions: NativePermissions(model: model)
             case .feeds: NativeFeeds(model: model)
             case .profiles: NativeProfiles(model: model)
+            case .scripts: ScriptManager(store: store)
+            case .credits: OrigamiCreditsView()
+            case .migration: MigrationView(store: store)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

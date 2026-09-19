@@ -8,7 +8,7 @@ struct AISetupPrompt: View {
                 ZStack {
                     Color.black.opacity(0.25).ignoresSafeArea().contentShape(Rectangle())
                     VStack(spacing: 16) {
-                        Image(systemName: "text.magnifyingglass").font(.title)
+                        Image(systemName: "sparkles").font(.title)
                         Text("Connect a service to Ask the Web").font(.headline)
                         Text("Verify your API key and choose a default model to continue.").foregroundStyle(.secondary)
                         Button("Configure Service") { store.showingAISetup = false; store.openAISettings() }

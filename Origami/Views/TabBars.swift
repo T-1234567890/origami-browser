@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TabBars: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     let vertical: Bool
     var emptySpaceClicked: (() -> Void)? = nil
@@ -21,6 +22,8 @@ struct TabBars: View {
     @State private var groupName = ""
     @State private var groupColor = TabGroupColor.purple
     @State private var showingGroupName = false
+
+    private var tabMotion: Animation? { reduceMotion ? nil : .easeOut(duration: 0.22) }
 
     private var pinnedTabs: [BrowserTab] { store.session.tabs.filter { $0.isPinned && store.session.visibleTabIDs.contains($0.id) } }
     private var ungroupedTabs: [BrowserTab] { store.session.tabs.filter { !$0.isPinned && $0.groupID == nil && store.session.visibleTabIDs.contains($0.id) } }
@@ -69,6 +72,11 @@ struct TabBars: View {
                 }
                 draggedTab = nil; draggedGroup = nil; dropTarget = nil; store.splitDropPreview = nil
             })
+        .onChange(of: store.session.tabs.count) { previous, current in
+            if current > previous {
+                withAnimation(tabMotion) { frozenTabWidth = nil; frozenStripWidth = nil }
+            }
+        }
         .onDisappear { store.splitDropPreview = nil }
         .overlay(alignment: .topLeading) {
             if draggedTab != nil || draggedGroup != nil {
@@ -78,6 +86,23 @@ struct TabBars: View {
             }
         }
         .preference(key: SidebarPopoverPreference.self, value: showingGroupName || draggedTab != nil || draggedGroup != nil)
+    }
+
+    @MainActor private func revealSelection(using proxy: ScrollViewProxy, in viewport: CGRect) async {
+        let target = scrollTarget
+        // Let the inserted row enter the layout before asking the scroll view to reveal it.
+        // A newer selection cancels this task, including during rapid Command-T presses.
+        await Task.yield()
+        guard !Task.isCancelled, target == scrollTarget,
+              draggedTab == nil, draggedGroup == nil, frozenTabWidth == nil,
+              let target else { return }
+        if let frame = tabFrames[target] ?? groupFrames[target] {
+            let visible = vertical
+                ? frame.minY >= viewport.minY && frame.maxY <= viewport.maxY
+                : frame.minX >= viewport.minX && frame.maxX <= viewport.maxX
+            if visible { return }
+        }
+        withAnimation(tabMotion) { proxy.scrollTo(target) }
     }
 
     private var dragPreview: some View {
@@ -158,10 +183,10 @@ struct TabBars: View {
                             Color.clear.contentShape(Rectangle())
                                 .onTapGesture { emptySpaceClicked?() }
                         }
-                        .animation(reduceMotion ? nil : .linear(duration: 0.18), value: store.session.tabs.map(\.id))
+                        .animation(tabMotion, value: store.session.tabs.map(\.id))
                     }
-                    .onChange(of: scrollTarget, initial: true) {
-                        if draggedTab == nil, draggedGroup == nil, frozenTabWidth == nil, let id = scrollTarget { proxy.scrollTo(id) }
+                    .task(id: scrollTarget) {
+                        await revealSelection(using: proxy, in: viewport.frame(in: .global))
                     }
                 }
             }
@@ -216,12 +241,12 @@ struct TabBars: View {
                         }
                         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredStripWidth = $0 }
                         .frame(minWidth: frozenStripWidth, alignment: .leading)
-                        .padding(.top, BrowserChromeMetrics.stripHeight - (pinnedTabs.isEmpty ? BrowserChromeMetrics.tabHeight : BrowserChromeMetrics.horizontalPinnedHeight))
-                        .animation(reduceMotion ? nil : .linear(duration: 0.18), value: store.session.tabs.map(\.id))
+                        .padding(.top, max(36, appearance.tabHeight + 10) - (pinnedTabs.isEmpty ? appearance.tabHeight : BrowserChromeMetrics.horizontalPinnedHeight))
+                        .animation(tabMotion, value: store.session.tabs.map(\.id))
                     }
                     .scrollIndicators(.hidden)
-                    .onChange(of: scrollTarget, initial: true) {
-                        if draggedTab == nil, draggedGroup == nil, frozenTabWidth == nil, let id = scrollTarget { proxy.scrollTo(id) }
+                    .task(id: scrollTarget) {
+                        await revealSelection(using: proxy, in: geometry.frame(in: .global))
                     }
                     .onChange(of: geometry.size.width) {
                         frozenTabWidth = nil
@@ -231,10 +256,10 @@ struct TabBars: View {
                 }
             }
             newGroupButton
-                .frame(height: BrowserChromeMetrics.stripHeight, alignment: .bottom)
+                .frame(height: max(36, appearance.tabHeight + 10), alignment: .bottom)
         }
         .padding(.horizontal, 8)
-        .frame(height: BrowserChromeMetrics.stripHeight)
+        .frame(height: max(36, appearance.tabHeight + 10))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("horizontalTabs")
         .onHover { inside in
@@ -271,7 +296,7 @@ struct TabBars: View {
                 if vertical { Text("New Tab"); Spacer(minLength: 0) }
             }
             .padding(.horizontal, 6)
-            .frame(height: BrowserChromeMetrics.tabHeight)
+            .frame(height: appearance.tabHeight)
             .contentShape(Rectangle())
         }
         .font(.system(size: 11)).foregroundStyle(.secondary).buttonStyle(.plain)
@@ -379,9 +404,9 @@ struct TabBars: View {
             Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 1, height: 16)
             splitMember(right)
         }
-        .frame(width: vertical ? nil : width, height: BrowserChromeMetrics.tabHeight)
+        .frame(width: vertical ? nil : width, height: appearance.tabHeight)
         .frame(maxWidth: vertical ? .infinity : nil)
-        .background(store.session.activeSplit != nil ? Personalization.shared.accent.opacity(0.18) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        .background(store.session.activeSplit != nil ? appearance.accent.opacity(0.18) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
         .contextMenu {
             Button("Separate Tabs") { store.endSplit() }
             Button("Swap Split Sides") { store.swapSplit() }
@@ -396,7 +421,7 @@ struct TabBars: View {
             HStack(spacing: 4) {
                 SiteIcon(store: store, url: tab.url, size: 14)
                 Text(tab.title).font(.system(size: 11, weight: store.session.selectedTabID == tab.id ? .medium : .regular)).lineLimit(1)
-            }.frame(maxWidth: .infinity, minHeight: BrowserChromeMetrics.tabHeight)
+            }.frame(maxWidth: .infinity, minHeight: appearance.tabHeight)
                 .padding(.horizontal, 6).contentShape(Rectangle())
         }.buttonStyle(.plain)
             .help(tab.title + " · Drag out to separate tabs")
@@ -442,8 +467,7 @@ struct TabBars: View {
                 RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.06)).allowsHitTesting(false)
             }
         }
-        .transition(reduceMotion ? .identity : .asymmetric(
-            insertion: .opacity.combined(with: .scale(scale: 0.96)), removal: .opacity))
+        .transition(reduceMotion ? .identity : .opacity)
         .id(tab.id)
     }
 }

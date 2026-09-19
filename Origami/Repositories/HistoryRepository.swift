@@ -20,6 +20,7 @@ final class HistoryRepository {
         return parts.url
     }
     func record(_ url: URL, title: String, profileID: UUID, at date: Date = Date()) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .history)
         guard let normalized = Self.normalized(url), let raw = PersistedURL.clean(url) else { return }
         try database.queue.write { db in
             try db.execute(sql: """
@@ -32,7 +33,8 @@ final class HistoryRepository {
         }
     }
     func list(profileID: UUID, limit: Int = 100) throws -> [HistoryVisit] {
-        try database.queue.read { db in
+        let profileID = try ProfileRepository(database).scope(profileID, .history)
+        return try database.queue.read { db in
             try Row.fetchAll(db, sql: """
               SELECT v.id,v.page_id,p.url,p.title,v.visited_at FROM history_visits v JOIN history_pages p ON p.id=v.page_id
               WHERE v.profile_id=? ORDER BY v.visited_at DESC,v.id DESC LIMIT ?
@@ -42,6 +44,7 @@ final class HistoryRepository {
         }
     }
     func delete(pageID: Int64, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .history)
         try database.queue.write { try $0.execute(sql: "DELETE FROM history_pages WHERE id=? AND profile_id=?", arguments: [pageID, profileID.uuidString]) }
     }
 }

@@ -1,7 +1,7 @@
 import GRDB
 
 enum Migrations {
-    static let names = ["v1_profiles", "v2_sessions", "v3_history", "v4_bookmarks", "v5_downloads", "v6_permissions", "v7_daily_browsing", "v8_site_rule_timestamps", "v9_group_appearance", "v10_profile_identity", "v11_split_view", "v12_feeds", "v13_power_tools", "v14_ai_search_events", "v15_remove_citation_generator"]
+    static let names = ["v1_profiles", "v2_sessions", "v3_history", "v4_bookmarks", "v5_downloads", "v6_permissions", "v7_daily_browsing", "v8_site_rule_timestamps", "v9_group_appearance", "v10_profile_identity", "v11_split_view", "v12_feeds", "v13_power_tools", "v14_ai_search_events", "v15_remove_citation_generator", "v16_web_highlights", "v17_profile_sharing"]
     static func make() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration(names[0]) { db in
@@ -121,6 +121,16 @@ enum Migrations {
                 UPDATE tabs SET url='origami://newtab', title='New Tab' WHERE url IN ('origami://references', 'origami://references/');
                 DELETE FROM recently_closed WHERE url IN ('origami://references', 'origami://references/');
                 """)
+        }
+        migrator.registerMigration(names[15]) { db in
+            try db.execute(sql: """
+                CREATE TABLE web_highlights(id TEXT PRIMARY KEY, profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+                  url TEXT NOT NULL, payload BLOB NOT NULL, created REAL NOT NULL);
+                CREATE INDEX web_highlights_page ON web_highlights(profile_id,url);
+                """)
+        }
+        migrator.registerMigration(names[16]) { db in
+            try db.execute(sql: "ALTER TABLE profiles ADD COLUMN sharing BLOB")
         }
         return migrator
     }

@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct NativeFeeds: View {
+    @Environment(\.profileAppearance) private var appearance
     let model: InternalContentModel
     @State private var feeds: [FollowedFeed] = []
     @State private var articles: [FeedArticle] = []
@@ -55,7 +56,7 @@ struct NativeFeeds: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(filteredArticles) { article in
                     HStack(alignment: .top, spacing: 10) {
-                        Button { mark(article, read: !article.read) } label: { Circle().fill(article.read ? Color.secondary.opacity(0.25) : Personalization.shared.accent).frame(width: 7, height: 7).frame(width: 20, height: 24) }
+                        Button { mark(article, read: !article.read) } label: { Circle().fill(article.read ? Color.secondary.opacity(0.25) : appearance.accent).frame(width: 7, height: 7).frame(width: 20, height: 24) }
                             .help(article.read ? "Mark Unread" : "Mark Read")
                         VStack(alignment: .leading, spacing: 5) {
                             Button(article.title) { open(article, reader: false) }.font(.body.weight(article.read ? .regular : .medium)).multilineTextAlignment(.leading)

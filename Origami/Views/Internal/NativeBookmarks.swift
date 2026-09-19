@@ -64,7 +64,10 @@ struct NativeBookmarks: View {
                 Button("Import HTML…") { Task { await model.call("bookmarks.import"); await refresh() } }
                 Button("Export HTML…") { Task { await model.call("bookmarks.export") } }
             }.buttonStyle(.plain)
-        }.task { await refresh() }.onChange(of: folder) { Task { await refresh() } }
+        }.task { await refresh() }
+        .onChange(of: model.store.bookmarkRevision) { Task { await refresh() } }
+        .onChange(of: model.store.application?.profileRevision) { folder = ""; Task { await refresh() } }
+        .onChange(of: folder) { Task { await refresh() } }
             .popover(isPresented: $editing) { editor }
             .popover(isPresented: $editingFolder) { folderEditor }
     }

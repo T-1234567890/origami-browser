@@ -6,7 +6,7 @@ struct AIContextActions: View {
     var body: some View {
         Menu {
             ForEach(AIAction.allCases.filter { $0 != .web && $0 != .peek && ($0 != .credibility || AISettings.aiPeekAvailable) }) { item in Button(item.rawValue) { action = item } }
-        } label: { Label("Ask / Research", systemImage: "text.magnifyingglass") }
+        } label: { Label("Ask / Research", systemImage: "sparkles") }
             .menuIndicator(.hidden)
             .sheet(item: $action) { item in AIContextSheet(store: store, action: item) }
     }
@@ -91,6 +91,7 @@ struct PeekAIResults: View {
 }
 
 private struct PeekAIAssessment: View {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     let page: TabPage
     let action: AIAction
@@ -109,7 +110,7 @@ private struct PeekAIAssessment: View {
                 ForEach(event.answerV1?.sources ?? [], id: \.id) { source in
                     if let url = AISource.safeURL(source.url) {
                         Button { store.newTab(url: url) } label: { Label(source.title, systemImage: "arrow.up.right") }
-                            .buttonStyle(.plain).font(.caption).foregroundStyle(Personalization.shared.accent)
+                            .buttonStyle(.plain).font(.caption).foregroundStyle(appearance.accent)
                     }
                 }
             } else if let error {

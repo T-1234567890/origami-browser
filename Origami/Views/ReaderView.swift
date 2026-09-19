@@ -12,6 +12,8 @@ struct ReaderView: View {
     @AppStorage("reader.width") private var width = 640.0
     @AppStorage("reader.spacing") private var spacing = 7.0
     @AppStorage("reader.appearance") private var appearance = "System"
+    @State private var speech = ReaderSpeech()
+    @State private var speechControls = false
     @State private var controls = false
     @State private var copied = false
     @Environment(\.colorScheme) private var systemScheme
@@ -33,9 +35,11 @@ struct ReaderView: View {
                 }
             }.frame(maxWidth: width, alignment: .leading).padding(32).padding(.bottom, 60).frame(maxWidth: .infinity)
         }
+        .onDisappear { speech.stop() }
+        .onChange(of: article) { speech.stop() }
+        .onChange(of: url) { speech.stop() }
         .task(id: copied) { if copied { try? await Task.sleep(for: .seconds(2)); copied = false } }
         .background((appearance == "Dark" || (appearance == "System" && systemScheme == .dark)) ? Color(white: 0.10) : Color.white)
-        .environment(\.colorScheme, appearance == "System" ? systemScheme : appearance == "Dark" ? .dark : .light)
         .overlay(alignment: .bottom) {
             HStack(spacing: 16) {
                 Button { controls = true } label: { Image(systemName: "textformat.size") }.help("Reading Options")
@@ -49,11 +53,18 @@ struct ReaderView: View {
                         }.padding(16).frame(width: 290)
                     }
                 Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString("# \(article.title)\n\n\(article.exportMarkdown)", forType: .string); copied = true } label: { if copied { Label("Copied", systemImage: "checkmark") } else { Image(systemName: "doc.on.doc") } }.help("Copy as Markdown")
+                Button { speechControls.toggle() } label: {
+                    Image(systemName: "speaker.wave.2")
+                        .foregroundStyle(speech.state == .idle ? Color.primary : Color.accentColor)
+                }.help("Read Aloud").accessibilityLabel("Read Aloud")
+                    .accessibilityValue(speech.state == .speaking ? "Reading" : speech.state == .paused ? "Paused" : "Stopped")
+                    .popover(isPresented: $speechControls) { ReaderSpeechPopover(speech: speech, article: article) }
                 Button(action: printArticle) { Image(systemName: "printer") }.help("Print Article")
                 if let url { ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }.help("Share Article") }
-                Button(action: close) { Image(systemName: "xmark") }.help("Close Reader")
+                Button { speech.stop(); close() } label: { Image(systemName: "xmark") }.help("Close Reader")
             }.buttonStyle(.plain).padding(12).background(.regularMaterial, in: Capsule()).padding(12)
         }
+        .environment(\.colorScheme, appearance == "System" ? systemScheme : appearance == "Dark" ? .dark : .light)
     }
     private func printArticle() {
         let text = NSTextView(frame: NSRect(x: 0, y: 0, width: 540, height: 750))

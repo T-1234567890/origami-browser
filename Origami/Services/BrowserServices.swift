@@ -5,7 +5,10 @@ final class BrowserServices {
     private var retentionTimer: Timer?
     private let retentionPreferences: BrowserPreferences
     private let retention: HistoryRetention
+    var httpsFirstEnabled: Bool { retentionPreferences.httpsFirst }
     let ai: AIController
+    let blocking: BlockingService
+    let highlighter: HighlightManager
     let power: PowerRepository
     let feeds: FeedService
     let profiles: ProfileRepository
@@ -22,9 +25,11 @@ final class BrowserServices {
     let favicons = FaviconService()
     let lifecycle = TabLifecycleService()
     init(database: DatabaseManager, preferences: BrowserPreferences? = nil, privateProfile: BrowserProfile? = nil,
-         sharedBookmarks: BookmarkRepository? = nil) throws {
+         sharedBookmarks: BookmarkRepository? = nil, sharedBlocking: BlockingService? = nil) throws {
         retentionPreferences = preferences ?? BrowserPreferences()
+        blocking = sharedBlocking ?? BlockingService(preferences: retentionPreferences, persistent: retentionPreferences.hasPersistentStorage && privateProfile == nil)
         retention = HistoryRetention(database: database)
+        highlighter = HighlightManager(database: database, preferences: retentionPreferences)
         ai = AIController(database: database, isPrivate: privateProfile != nil)
         power = PowerRepository(database)
         feeds = FeedService(database: database)
@@ -32,7 +37,10 @@ final class BrowserServices {
         websiteData = WebsiteDataService(ephemeralStore: privateProfile == nil ? nil : .nonPersistent())
         profiles = ProfileRepository(database)
         _ = try profiles.ensureDefault()
-        if let privateProfile, privateProfile.id != BrowserProfile.defaultID { _ = try profiles.insert(privateProfile) }
+        if var privateProfile, privateProfile.id != BrowserProfile.defaultID {
+            privateProfile.sharing.history = false
+            _ = try profiles.insert(privateProfile)
+        }
         history = HistoryRepository(database)
         bookmarks = sharedBookmarks ?? BookmarkRepository(database)
         downloadRepository = DownloadRepository(database)

@@ -63,7 +63,7 @@ extension BrowserStore {
             guard let id = params["id"] as? NSNumber else { throw RepositoryError.invalidInput }
             try services.history.deleteVisit(id.int64Value, profileID: profileID); return true
         case "history.clear":
-            guard await confirm("Delete history in this date range for this profile?", tabID: tabID) else { return false }
+            guard await confirm("Delete history in this date range? Shared history is removed for every profile using it.", tabID: tabID) else { return false }
             try services.history.clear(profileID: profileID, since: Date(timeIntervalSince1970: params["since"] as? Double ?? 0), until: Date(timeIntervalSince1970: params["until"] as? Double ?? Date.distantFuture.timeIntervalSince1970)); return true
         case "recent.list":
             return recentlyClosed.filter { $0.tab.canReopen }.reversed().prefix(20).map { ["id": $0.tab.id.uuidString, "title": $0.tab.title, "url": $0.tab.url?.absoluteString ?? ""] }
@@ -86,26 +86,26 @@ extension BrowserStore {
             return try services.bookmarks.folders(profileID: profileID).map { ["id": $0.id.uuidString, "parentID": $0.parentID?.uuidString ?? "", "title": $0.title] }
         case "bookmarks.create":
             guard let url = URL(string: string("url")) else { throw RepositoryError.invalidInput }
-            bookmarkRevision += 1
+            bookmarksChanged()
             return try services.bookmarks.addUnique(url: url, title: string("title"), folderID: folder(), profileID: profileID).uuidString
         case "bookmarks.edit":
             guard let url = URL(string: string("url")) else { throw RepositoryError.invalidInput }
             try services.bookmarks.edit(try uuid("id"), url: url, title: string("title"), folderID: folder(), favorite: params["favorite"] as? Bool ?? false, profileID: profileID)
-            bookmarkRevision += 1; return true
+            bookmarksChanged(); return true
         case "bookmarks.delete":
-            try services.bookmarks.delete(try uuid("id"), profileID: profileID); bookmarkRevision += 1; return true
+            try services.bookmarks.delete(try uuid("id"), profileID: profileID); bookmarksChanged(); return true
         case "bookmarks.reorder":
-            try services.bookmarks.reorder(try uuid("id"), before: try uuid("before"), profileID: profileID); bookmarkRevision += 1; return true
+            try services.bookmarks.reorder(try uuid("id"), before: try uuid("before"), profileID: profileID); bookmarksChanged(); return true
         case "folders.create":
-            bookmarkRevision += 1
+            bookmarksChanged()
             return try services.bookmarks.createFolder(title: string("title"), parentID: folder(), profileID: profileID).uuidString
         case "folders.edit":
             let id = try uuid("id")
             try services.bookmarks.moveFolder(id, parentID: folder(), position: params["position"] as? Int ?? 0, profileID: profileID)
-            try services.bookmarks.renameFolder(id, title: string("title"), profileID: profileID); bookmarkRevision += 1; return true
+            try services.bookmarks.renameFolder(id, title: string("title"), profileID: profileID); bookmarksChanged(); return true
         case "folders.delete":
             guard await confirm("Delete this folder and its bookmarks?", tabID: tabID) else { return false }
-            try services.bookmarks.deleteFolder(try uuid("id"), profileID: profileID); bookmarkRevision += 1; return true
+            try services.bookmarks.deleteFolder(try uuid("id"), profileID: profileID); bookmarksChanged(); return true
         case "folders.open":
             try openFolder(try uuid("id"), grouped: params["grouped"] as? Bool ?? false); return true
         case "bookmarks.import", "bookmarks.export", "downloads.directory":
@@ -136,7 +136,7 @@ extension BrowserStore {
             if method == "data.list" {
                 return await services.websiteData.records(profile: profile).map { ["name": $0.displayName, "types": Array($0.dataTypes).sorted()] as [String: Any] }
             }
-            guard await confirm("Clear selected browsing data for “\(profile.name)”? This cannot be undone and may sign you out of websites.", tabID: tabID) else { return false }
+            guard await confirm("Clear selected browsing data for “\(profile.name)”? This cannot be undone and may sign you out of websites. Shared data is cleared for every profile using it.", tabID: tabID) else { return false }
             if method == "data.remove" {
                 let names = Set(params["names"] as? [String] ?? [string("name")])
                 guard !names.isEmpty, names.allSatisfy({ !$0.isEmpty && $0.count <= 4096 }) else { throw RepositoryError.invalidInput }

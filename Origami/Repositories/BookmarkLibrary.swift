@@ -3,7 +3,8 @@ import GRDB
 
 extension BookmarkRepository {
     func importItems(_ items: [ImportedBookmark], profileID: UUID) throws -> Int {
-        try database.queue.write { db in
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
+        return try database.queue.write { db in
             var count = 0
             func insert(_ items: [ImportedBookmark], parent: UUID?) throws {
                 var position = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM bookmarks WHERE profile_id=? AND folder_id IS ?", arguments: [profileID.uuidString, parent?.uuidString]) ?? 0
@@ -28,7 +29,8 @@ extension BookmarkRepository {
         }
     }
     func library(profileID: UUID, folderID: UUID?, search: String = "", offset: Int = 0, favorites: Bool = false) throws -> [[String: Any]] {
-        try database.queue.read { db in
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
+        return try database.queue.read { db in
             try Row.fetchAll(db, sql: """
             SELECT * FROM bookmarks WHERE profile_id=? AND (?=1 OR ?<>'' OR folder_id IS ?)
               AND (?='' OR title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\') AND (?=0 OR favorite=1)
@@ -41,6 +43,7 @@ extension BookmarkRepository {
         }
     }
     func edit(_ id: UUID, url: URL, title: String, folderID: UUID?, favorite: Bool, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let clean = PersistedURL.clean(url) else { throw RepositoryError.invalidInput }
         try database.queue.write { db in
             if let folderID, try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM bookmark_folders WHERE id=? AND profile_id=?", arguments: [folderID.uuidString, profileID.uuidString]) != 1 { throw RepositoryError.wrongProfile }
@@ -48,6 +51,7 @@ extension BookmarkRepository {
         }
     }
     func moveFolder(_ id: UUID, parentID: UUID?, position: Int, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         try database.queue.write { db in
             if let parentID {
                 guard parentID != id, try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM bookmark_folders WHERE id=? AND profile_id=?", arguments: [parentID.uuidString, profileID.uuidString]) == 1 else { throw RepositoryError.invalidInput }
@@ -58,6 +62,7 @@ extension BookmarkRepository {
         }
     }
     func reorder(_ id: UUID, before target: UUID, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         try database.queue.write { db in
             guard let row = try Row.fetchOne(db, sql: "SELECT folder_id,position FROM bookmarks WHERE id=? AND profile_id=?", arguments: [target.uuidString, profileID.uuidString]) else { throw RepositoryError.invalidInput }
             let folder: String? = row["folder_id"]
@@ -67,12 +72,14 @@ extension BookmarkRepository {
         }
     }
     @discardableResult func addUnique(url: URL, title: String, folderID: UUID? = nil, profileID: UUID) throws -> UUID {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         guard let clean = PersistedURL.clean(url) else { throw RepositoryError.invalidInput }
         if let existing = try database.queue.read({ try String.fetchOne($0, sql: "SELECT id FROM bookmarks WHERE profile_id=? AND folder_id IS ? AND url=?", arguments: [profileID.uuidString, folderID?.uuidString, clean.absoluteString]) }), let id = UUID(uuidString: existing) { return id }
         let position = try database.queue.read { try Int.fetchOne($0, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM bookmarks WHERE profile_id=? AND folder_id IS ?", arguments: [profileID.uuidString, folderID?.uuidString])! }
         return try create(url: clean, title: title, folderID: folderID, position: position, profileID: profileID)
     }
     func folderBookmarks(_ folder: UUID, profileID: UUID) throws -> [Bookmark] {
+        let profileID = try ProfileRepository(database).scope(profileID, .bookmarks)
         let ids: Set<String> = try database.queue.read { db in
             Set(try String.fetchAll(db, sql: "WITH RECURSIVE f(id) AS (SELECT id FROM bookmark_folders WHERE id=? AND profile_id=? UNION SELECT b.id FROM bookmark_folders b JOIN f ON b.parent_id=f.id) SELECT id FROM f", arguments: [folder.uuidString, profileID.uuidString]))
         }

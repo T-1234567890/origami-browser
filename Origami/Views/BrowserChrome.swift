@@ -19,20 +19,22 @@ enum BrowserChromeMetrics {
 
 // One backdrop belongs to the window chrome; tab rows never create their own material layers.
 struct BrowserChromeBackground: NSViewRepresentable {
+    @Environment(\.profileAppearance) private var appearance
     var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = Personalization.shared.glass == "Reduced" ? .windowBackground : .sidebar
+        view.material = appearance.glass == "Reduced" ? .windowBackground : .sidebar
         view.blendingMode = blendingMode
         view.state = .followsWindowActiveState
         return view
     }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) { nsView.blendingMode = blendingMode; nsView.material = Personalization.shared.glass == "Reduced" ? .windowBackground : .sidebar }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) { nsView.blendingMode = blendingMode; nsView.material = appearance.glass == "Reduced" ? .windowBackground : .sidebar }
 }
 
 struct ChromeSurface: ViewModifier {
+    @Environment(\.profileAppearance) private var appearance
     func body(content: Content) -> some View {
-        if Personalization.shared.glass == "Reduced" {
+        if appearance.glass == "Reduced" {
             content.background(.regularMaterial, in: Capsule())
         } else if #available(macOS 26, *) {
             content.glassEffect(.regular, in: .capsule)

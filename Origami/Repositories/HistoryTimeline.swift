@@ -12,7 +12,8 @@ struct TimelineQuery {
 }
 extension HistoryRepository {
     func timeline(profileID: UUID, query: TimelineQuery) throws -> [[String: Any]] {
-        try database.queue.read { db in
+        let profileID = try ProfileRepository(database).scope(profileID, .history)
+        return try database.queue.read { db in
             try Row.fetchAll(db, sql: """
             SELECT v.id,v.page_id,v.visited_at,p.url,p.title,p.host,p.visit_count
             FROM history_visits v JOIN history_pages p ON p.id=v.page_id
@@ -34,12 +35,14 @@ extension HistoryRepository {
         text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
     }
     func deleteVisit(_ id: Int64, profileID: UUID) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .history)
         try database.queue.write { db in
             try db.execute(sql: "DELETE FROM history_visits WHERE id=? AND profile_id=?", arguments: [id, profileID.uuidString])
             try Self.recount(profileID, db: db)
         }
     }
     func clear(profileID: UUID, since: Date, until: Date = .distantFuture) throws {
+        let profileID = try ProfileRepository(database).scope(profileID, .history)
         try database.queue.write { db in
             try db.execute(sql: "DELETE FROM history_visits WHERE profile_id=? AND visited_at>=? AND visited_at<?", arguments: [profileID.uuidString, since.timeIntervalSince1970, until.timeIntervalSince1970])
             try Self.recount(profileID, db: db)

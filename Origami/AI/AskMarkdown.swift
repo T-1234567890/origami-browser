@@ -2,13 +2,14 @@ import SwiftUI
 import MarkdownUI
 
 struct AskMarkdown: View {
+    @Environment(\.profileAppearance) private var appearance
     let text: String
     let store: BrowserStore
     var body: some View {
         Markdown(text)
             .markdownTheme(.basic)
             .markdownTextStyle { FontFamily(.system(.serif)); FontSize(17); ForegroundColor(.primary) }
-            .markdownTextStyle(\.link) { ForegroundColor(Personalization.shared.accent) }
+            .markdownTextStyle(\.link) { ForegroundColor(appearance.accent) }
             .markdownImageProvider(AnswerImageProvider(store: store))
             .markdownInlineImageProvider(AnswerInlineImageProvider())
             .textSelection(.enabled)
@@ -31,10 +32,11 @@ private struct AnswerInlineImageProvider: InlineImageProvider {
     func image(with url: URL, label: String) async throws -> Image { Image(systemName: "photo") }
 }
 struct BreathingCircle: View {
+    @Environment(\.profileAppearance) private var appearance
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
     var body: some View {
-        Circle().fill(Personalization.shared.accent).frame(width: 10, height: 10)
+        Circle().fill(appearance.accent).frame(width: 10, height: 10)
             .scaleEffect(expanded ? 1 : 0.65).opacity(expanded ? 0.9 : 0.35)
             .onAppear { if reduceMotion { expanded = true } else { withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { expanded = true } } }
             .accessibilityLabel("Generating response")

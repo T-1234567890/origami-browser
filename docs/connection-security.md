@@ -1,0 +1,11 @@
+# Connection security
+
+HTTPS-First is enabled by default in Settings → Privacy → Connection Security. Origami uses WebKit's public `preferredHTTPSNavigationPolicy` with `userMediatedFallbackToHTTP`: WebKit tries HTTPS for top-level HTTP navigation and supplies its warning and explicit HTTP continuation when upgrading fails. Origami never selects automatic HTTP fallback or accepts a failed certificate challenge.
+
+The preference is applied when creating a web view and for each navigation, including existing tabs and private windows. Turning it off selects `keepAsRequested`; certificate validation and WebKit's HSTS/known-host protections remain in force. WebKit owns redirects, request bodies and fallback decisions, so Origami does not replay form submissions or implement certificate exceptions. The API is available before Origami's minimum macOS 15.4 version. Subframe policies and system-level overrides follow WebKit's behavior.
+
+The existing Site Information button displays a lock for a committed HTTPS connection with certificate information, and a red warning for HTTP or insecure content. Loading/unverified pages never receive the validated-connection label. The existing permissions popover describes the connection, distinguishes insecure content and offers the system View Certificate sheet when the current page has a certificate. This describes transport encryption, not website trustworthiness.
+
+Automated tests cover default/persistent preferences, changes on existing pages, private-page policy, no automatic fallback, and unverified certificate presentation. They use no accounts or remote websites. Before release, manually exercise a working HTTPS upgrade, an HTTP-only site, a downgrade redirect, an invalid/expired certificate, cancel/continue, form submissions, back/forward, and the certificate sheet on supported macOS versions. Native warning presentation and live TLS outcomes are not established by policy tests.
+
+References: [WebKit HTTPS navigation policy](https://developer.apple.com/documentation/webkit/wkwebpagepreferences/preferredhttpsnavigationpolicy), [server trust](https://developer.apple.com/documentation/webkit/wkwebview/servertrust), [secure content state](https://developer.apple.com/documentation/webkit/wkwebview/hasonlysecurecontent).

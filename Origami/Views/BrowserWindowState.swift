@@ -6,6 +6,21 @@ import AppKit
 final class BrowserWindowState {
     @ObservationIgnored weak var window: NSWindow?
     private var focusRevision = 0
+    @ObservationIgnored private weak var closingStore: BrowserStore?
+    func closeIfEmpty(_ store: BrowserStore) {
+        guard store.session.tabs.isEmpty else { return }
+        closingStore = store
+        DispatchQueue.main.async { [weak self] in self?.finishEmptyWindowClose() }
+    }
+    private func finishEmptyWindowClose() {
+        guard let store = closingStore else { return }
+        guard store.session.tabs.isEmpty else { closingStore = nil; return }
+        guard let window else { return }
+        closingStore = nil
+        // Closing the final tab is already an explicit close request. Do not depend
+        // on a titlebar close button being enabled (e.g. during fullscreen changes).
+        window.close()
+    }
     var isFullScreen = false
     var showingPreferences = false
     var profileStore: BrowserStore?
@@ -16,27 +31,29 @@ final class BrowserWindowState {
     }
     func refreshFocus() { focusRevision += 1 }
     func attach(_ window: NSWindow?, layout: TabLayout, savedFrame: String?, onboarding: Bool = false) {
+        guard let window else { return }
         let isNewWindow = self.window !== window
         self.window = window
-        if isNewWindow, let window, let savedFrame {
+        if isNewWindow, let savedFrame {
             let frame = NSRectFromString(savedFrame)
             if frame.width >= 760, frame.height >= 500, frame.width <= 10000, frame.height <= 10000,
                NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) {
                 window.setFrame(frame, display: false)
             }
         }
-        window?.titleVisibility = .hidden
-        window?.titlebarAppearsTransparent = true
-        window?.titlebarSeparatorStyle = .none
-        window?.styleMask.insert(.fullSizeContentView)
-        window?.isOpaque = false
-        window?.backgroundColor = .clear
-        isFullScreen = window?.styleMask.contains(.fullScreen) == true
-        window?.toolbar?.isVisible = !onboarding && layout == .horizontal && !isFullScreen
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.styleMask.insert(.fullSizeContentView)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        isFullScreen = window.styleMask.contains(.fullScreen) == true
+        window.toolbar?.isVisible = !onboarding && layout == .horizontal && !isFullScreen
         for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
-            window?.standardWindowButton(kind)?.isHidden = isFullScreen
+            window.standardWindowButton(kind)?.isHidden = isFullScreen
         }
         refreshFocus()
+        finishEmptyWindowClose()
     }
 }
 

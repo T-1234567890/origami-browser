@@ -45,6 +45,14 @@ struct SiteInformation: View {
                 Spacer(minLength: 0)
             }.padding(.bottom, 2)
 
+            if let page, origin != nil {
+                Divider()
+                Label(page.connectionSecurity.rawValue, systemImage: page.connectionSecurity.symbol)
+                    .foregroundStyle(page.connectionSecurity.warning ? Color.red : Color.primary)
+                Text(page.connectionSecurity == .secure ? "Certificate validated by WebKit. Encryption does not establish that this website is trustworthy." : page.connectionSecurity == .insecure ? "This connection is not encrypted and has no TLS certificate. Others may read or change data in transit." : page.connectionSecurity == .mixed ? "The HTTPS certificate was accepted, but some page content is not secure." : "No validated connection is available for this navigation.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if page.canViewCertificate { Button("View Certificate…") { page.viewCertificate() } }
+            }
             if let origin {
                 Divider()
                 VStack(spacing: 0) {
@@ -72,6 +80,10 @@ struct SiteInformation: View {
                 }
             }
 
+            if let host = store.selectedTab?.url?.host, origin != nil, let blocking = store.services?.blocking {
+                Divider()
+                SiteBlockingControls(service: blocking, host: host, isPrivate: store.isPrivate)
+            }
             Divider()
             VStack(spacing: 0) {
                 navigationRow("Website Data", destination: .data)

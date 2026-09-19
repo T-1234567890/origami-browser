@@ -6,6 +6,7 @@ final class WebsiteDataService {
     init(ephemeralStore: WKWebsiteDataStore? = nil) { self.ephemeralStore = ephemeralStore }
     func store(for profile: BrowserProfile) -> WKWebsiteDataStore {
         if let ephemeralStore { return ephemeralStore }
+        if profile.sharing.website { return .default() }
         if let id = profile.websiteStoreID { return WKWebsiteDataStore(forIdentifier: id) }
         return .default()
     }

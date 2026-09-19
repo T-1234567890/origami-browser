@@ -36,33 +36,22 @@ struct BrowsingExperienceView: View {
                     let anchor = store.peekLinkBounds ?? CGRect(x: store.peekAnchor.x, y: store.peekAnchor.y, width: 0, height: 0)
                     let link = CGRect(x: paneOffset + anchor.minX * paneWidth, y: anchor.minY * geometry.size.height, width: anchor.width * paneWidth, height: anchor.height * geometry.size.height)
                     if let frame = PeekLayout.frame(viewport: store.peekViewport, link: link, container: geometry.size) {
-                        let panel = AISettings.shared.aiPeekActive ? PeekLayout.aiPanelFrame(preview: frame, link: link, container: geometry.size) : nil
-                        let combined = panel.map { frame.union($0) } ?? frame
-                        PeekDismissMonitor(preview: combined, dismiss: store.dismissPeek).allowsHitTesting(false)
-                        ZStack(alignment: .topLeading) {
-                            PeekThumbnail(page: peek, viewport: store.peekViewport)
-                                .frame(width: frame.width, height: frame.height)
-                                .background(Color(nsColor: .textBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
-                                .offset(x: frame.minX - combined.minX, y: frame.minY - combined.minY)
-                            if let panel {
-                                PeekAIResults(store: store, page: peek)
-                                    .frame(width: panel.width, height: panel.height)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
-                                    .offset(x: panel.minX - combined.minX, y: panel.minY - combined.minY)
-                            }
-                        }
-                        .id(peek.tabID)
-                        .frame(width: combined.width, height: combined.height, alignment: .topLeading)
-                        .contentShape(Rectangle())
-                        .offset(x: combined.minX, y: combined.minY).transition(.opacity)
-                        .onExitCommand { store.dismissPeek() }
-                        .onHover { inside in
+                        PeekDismissMonitor(preview: frame, dismiss: store.dismissPeek, interaction: { inside in
                             store.peekInteracting = inside
-                            if !inside, store.peekSourceID != nil { store.deferPeekDismissal() }
-                        }
+                            if inside { store.peekDismissGeneration = UUID() }
+                            else if store.peekSourceID != nil { store.deferPeekDismissal() }
+                        }).allowsHitTesting(false)
+                        PeekCard(page: peek, url: store.peekURL ?? peek.currentURL ?? URL(string: "about:blank")!,
+                                 viewport: store.peekViewport, mode: store.peekMode,
+                                 open: store.promotePeek, dismiss: store.dismissPeek, swiping: { active in
+                                     store.peekSwiping = active
+                                     if !active, !store.peekInteracting, store.peekSourceID != nil { store.deferPeekDismissal() }
+                                 })
+                        .id(peek.tabID)
+                        .frame(width: frame.width, height: frame.height)
+                        .contentShape(Rectangle())
+                        .offset(x: frame.minX, y: frame.minY).transition(.opacity)
+                        .onExitCommand { store.dismissPeek() }
                     }
                 }
             }
@@ -85,12 +74,27 @@ struct BrowsingExperienceView: View {
 private struct PeekDismissMonitor: NSViewRepresentable {
     var preview: CGRect
     var dismiss: () -> Void
+    var interaction: (Bool) -> Void
     func makeNSView(context: Context) -> Monitor { Monitor() }
-    func updateNSView(_ view: Monitor, context: Context) { view.preview = preview; view.dismiss = dismiss }
+    func updateNSView(_ view: Monitor, context: Context) {
+        view.preview = preview; view.dismiss = dismiss; view.interaction = interaction; view.updateTrackingAreas()
+    }
     final class Monitor: NSView {
         var preview = CGRect.zero
         var dismiss: (() -> Void)?
+        var interaction: ((Bool) -> Void)?
+        private var tracking: NSTrackingArea?
+        private var scrolling = PeekScrollInteraction()
         var token: Any?
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if tracking?.rect == preview { return }
+            if let tracking { removeTrackingArea(tracking) }
+            let area = NSTrackingArea(rect: preview, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+            addTrackingArea(area); tracking = area
+        }
+        override func mouseEntered(with event: NSEvent) { interaction?(true) }
+        override func mouseExited(with event: NSEvent) { interaction?(false) }
         override var isFlipped: Bool { true }
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override func viewDidMoveToWindow() {
@@ -99,8 +103,17 @@ private struct PeekDismissMonitor: NSViewRepresentable {
             guard window != nil else { return }
             token = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .leftMouseDown, .rightMouseDown]) { [weak self] event in
                 guard let self, event.window === self.window else { return event }
-                let inside = self.preview.contains(self.convert(event.locationInWindow, from: nil))
-                if !inside { self.dismiss?() }
+                guard let window = self.window else { return event }
+                let point = self.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+                let inside = self.preview.contains(point)
+                if event.type == .scrollWheel {
+                    let dismiss = self.scrolling.shouldDismiss(inside: inside,
+                        began: event.phase.contains(.began) || event.phase.isEmpty,
+                        ended: event.phase.contains(.ended) || event.phase.contains(.cancelled) || event.phase.isEmpty,
+                        momentum: !event.momentumPhase.isEmpty)
+                    if event.momentumPhase.isEmpty { self.interaction?(inside) }
+                    if dismiss { self.dismiss?() }
+                } else if !inside { self.dismiss?() }
                 return event
             }
         }
@@ -109,6 +122,7 @@ private struct PeekDismissMonitor: NSViewRepresentable {
 }
 
 private struct PageSplitDropSurface: ViewModifier {
+    @Environment(\.profileAppearance) private var appearance
     let store: BrowserStore
     let id: UUID?
     func body(content: Content) -> some View {
@@ -119,9 +133,9 @@ private struct PageSplitDropSurface: ViewModifier {
                                            value: [id: geometry.frame(in: .global)])
                     if let target = store.splitDropPreview, target.pageID == id {
                         RoundedRectangle(cornerRadius: BrowserChromeMetrics.contentCornerRadius)
-                            .fill(Personalization.shared.accent.opacity(0.18))
+                            .fill(appearance.accent.opacity(0.18))
                             .overlay { RoundedRectangle(cornerRadius: BrowserChromeMetrics.contentCornerRadius)
-                                .strokeBorder(Personalization.shared.accent, lineWidth: 2) }
+                                .strokeBorder(appearance.accent, lineWidth: 2) }
                             .frame(width: geometry.size.width / 2)
                             .offset(x: target.onLeft ? 0 : geometry.size.width / 2)
                     }

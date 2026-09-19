@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct StructuredAnswerView: View {
+    @Environment(\.profileAppearance) private var appearance
     let answer: OrigamiAnswerV1
     let store: BrowserStore
     var visualsAllowed: Bool
@@ -34,7 +35,7 @@ struct StructuredAnswerView: View {
                 }
                 if answer.sources.count > 3 {
                     Button(expanded ? "Show less" : "Show more (\(answer.sources.count - 3))") { expanded.toggle() }
-                        .buttonStyle(.plain).font(.caption).foregroundStyle(Personalization.shared.accent)
+                        .buttonStyle(.plain).font(.caption).foregroundStyle(appearance.accent)
                 }
             }
         }.textSelection(.enabled)
@@ -42,6 +43,7 @@ struct StructuredAnswerView: View {
     private func open(_ raw: String) { if let url = AISource.safeURL(raw) { store.newTab(url: url) } }
 }
 private struct StructuredBlockView: View {
+    @Environment(\.profileAppearance) private var appearance
     let block: AnswerBlockV1
     let answer: OrigamiAnswerV1
     let store: BrowserStore
@@ -102,7 +104,7 @@ private struct StructuredBlockView: View {
             guard let number = answer.sourceNumber(id) else { continue }
             var mark = AttributedString(" [\(number)]")
             mark.font = .system(size: 12)
-            mark.foregroundColor = Personalization.shared.accent
+            mark.foregroundColor = appearance.accent
             mark.link = URL(string: "origami-citation://reference/\(number)")
             content.append(mark)
         }

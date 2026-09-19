@@ -37,6 +37,7 @@ struct NativeNewTab: View {
 }
 
 struct NativeSearchTab: View {
+    @Environment(\.profileAppearance) private var appearance
     let model: InternalContentModel
     @Binding var asking: Bool
     @State private var mode = AskMode.ask
@@ -72,14 +73,14 @@ struct NativeSearchTab: View {
             ScrollView {
                 ZStack {
                     Group {
-                        if !asking, let data = Personalization.shared.titleImage, let image = NSImage(data: data) {
+                        if !asking, let data = appearance.titleImage, let image = NSImage(data: data) {
                             Image(nsImage: image).resizable().scaledToFit().frame(width: min(420, max(0, geometry.size.width - 48)), height: 95).accessibilityLabel("Origami")
                         } else {
                             Text(asking ? "Ask the Web" : "Origami").font(.system(size: 34, weight: .medium, design: asking ? .serif : .default))
                         }
-                    }.frame(height: !asking && Personalization.shared.titleImage != nil ? 97 : 72).position(x: geometry.size.width / 2, y: height / 2 - 90)
+                    }.frame(height: !asking && appearance.titleImage != nil ? 97 : 72).position(x: geometry.size.width / 2, y: height / 2 - 90)
                     HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        Image(systemName: asking ? "sparkles" : "magnifyingglass").foregroundStyle(.secondary)
                         Omnibox(store: model.store, allowRemote: !asking && remoteSuggestionsAllowed,
                                 tabID: model.tabID, value: query, focusRequest: searchFocusRequest,
                                 canFocus: false, suggestionsEnabled: !asking, suggestionAnchor: suggestionAnchor,
@@ -98,7 +99,7 @@ struct NativeSearchTab: View {
                             AskModeControl(mode: $mode)
                         } else {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 78, maximum: 100))], spacing: 20) {
-                                ForEach(Array((Personalization.shared.favorites ? favorites : []).enumerated()), id: \.offset) { _, site in
+                                ForEach(Array((appearance.favorites ? favorites : []).enumerated()), id: \.offset) { _, site in
                                     Button { model.open(site.text("url")) } label: {
                                         VStack(spacing: 8) {
                                             SiteIcon(store: model.store, url: URL(string: site.text("url")), size: 24)
@@ -113,14 +114,14 @@ struct NativeSearchTab: View {
                 }.frame(height: height)
             }
         }
-        .environment(\.colorScheme, !asking && Personalization.shared.wallpaper != nil ? (Personalization.shared.wallpaperIsDark ? .dark : .light) : colorScheme)
+        .environment(\.colorScheme, !model.store.isPrivate && !asking && appearance.wallpaper != nil ? (appearance.wallpaperIsDark ? .dark : .light) : colorScheme)
         .overlay(alignment: .bottomLeading) {
             if asking {
                 HStack(spacing: 16) {
                     AskModelControl(selection: Binding(get: { selectedModel }, set: { selectedModel = $0 }), mode: mode)
                         .frame(maxWidth: 220, alignment: .leading).fixedSize(horizontal: true, vertical: false)
                     Button { showingTimeline = true } label: {
-                        Label("History", systemImage: "clock").font(.caption)
+                        Label("History", systemImage: InternalPage.history.symbol).font(.caption)
                     }.buttonStyle(.plain)
                         .popover(isPresented: $showingTimeline) { AskTimeline(store: model.store, tabID: model.tabID) }
                 }.foregroundStyle(Color.secondary).padding(22)
@@ -133,7 +134,8 @@ struct NativeSearchTab: View {
         }
         .background {
             if asking { (colorScheme == .dark ? Color(red: 0.115, green: 0.11, blue: 0.10) : Color(red: 0.985, green: 0.975, blue: 0.955)) }
-            else if let data = Personalization.shared.wallpaper, let image = NSImage(data: data) {
+            else if model.store.isPrivate { Color(nsColor: .windowBackgroundColor) }
+            else if let data = appearance.wallpaper, let image = NSImage(data: data) {
                 GeometryReader { geometry in
                     Image(nsImage: image).resizable().scaledToFill().frame(width: geometry.size.width, height: geometry.size.height).clipped()
                 }.allowsHitTesting(false)
@@ -154,11 +156,13 @@ struct NativeWelcome: View {
     let model: InternalContentModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step = 0
+    @State private var importFlow = MigrationFlow()
+    @State private var importedSession: BrowserSession?
     @State private var layout = TabLayout.horizontal
     @State private var engine = SearchEngine.google
     @State private var strict = false
     @State private var defaultAsk = false
-    private let titles = ["Origami", "Tabs", "Search Engine", "Default New Tab", "Privacy"]
+    private let titles = ["Origami", "Tabs", "Search Engine", "Default New Tab", "Privacy", "Bring Your Browser Data"]
     var body: some View {
         ZStack {
             BrowserChromeBackground().ignoresSafeArea()
@@ -190,7 +194,7 @@ struct NativeWelcome: View {
                     case 3:
                         HStack(spacing: 24) {
                             OnboardingPrivacyChoice(title: "Search the Web", symbol: "magnifyingglass", selected: !defaultAsk) { defaultAsk = false }
-                            OnboardingPrivacyChoice(title: "Ask the Web", symbol: "text.magnifyingglass", selected: defaultAsk) { defaultAsk = true }
+                            OnboardingPrivacyChoice(title: "Ask the Web", symbol: "sparkles", selected: defaultAsk) { defaultAsk = true }
                         }
                     case 4:
                         VStack(spacing: 18) {
@@ -203,6 +207,14 @@ struct NativeWelcome: View {
                                 .frame(maxWidth: .infinity)
                             Text("No account required. No telemetry.").font(.callout)
                         }.multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                    case 5:
+                        ScrollView {
+                            MigrationImportContent(store: model.store, flow: importFlow, onboarding: true) { session in
+                                importedSession = session
+                                if importFlow.selection.search, importFlow.profile?.search != nil { engine = model.store.preferences.searchEngine }
+                            }
+                            .padding(4)
+                        }.scrollIndicators(.hidden).frame(height: 300)
                     default: EmptyView()
                     }
                 }.frame(maxWidth: 420, minHeight: step == 0 ? 60 : 100)
@@ -212,17 +224,18 @@ struct NativeWelcome: View {
                         Button { step -= 1 } label: {
                             Image(systemName: "chevron.left").font(.system(size: 13, weight: .medium))
                                 .frame(width: 28, height: 28).contentShape(Rectangle())
-                        }.buttonStyle(.plain).foregroundStyle(.secondary)
+                        }.buttonStyle(.plain).foregroundStyle(.secondary).disabled(importFlow.busy)
                             .help("Previous").accessibilityLabel("Previous")
                     }
                     Spacer()
-                    Button(step == 4 ? "Start Browsing" : "Continue") {
-                        if step < 4 { step += 1 } else { Task {
+                    Button(step == 5 ? (importFlow.completed ? "Start Browsing" : "Skip for Now") : "Continue") {
+                        if step < 5 { step += 1 } else { Task {
                             guard await model.call("settings.write", ["layout": layout.rawValue, "search": engine.rawValue, "restore": model.store.session.restoreSession, "privacy": strict ? "strict" : "standard"]) != nil else { return }
                             Personalization.shared.defaultAsk = defaultAsk
                             await model.call("onboarding.complete")
+                            if let importedSession { _ = model.store.application?.openImportedSession(importedSession) }
                         } }
-                    }.buttonStyle(.borderedProminent).controlSize(.large).keyboardShortcut(.defaultAction)
+                    }.buttonStyle(.borderedProminent).controlSize(.large).keyboardShortcut(.defaultAction).disabled(importFlow.busy)
                 }
             }.padding(32).animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: step)
         }.task {
@@ -236,6 +249,7 @@ struct NativeWelcome: View {
 
 
 private struct OnboardingPrivacyChoice: View {
+    @Environment(\.profileAppearance) private var appearance
     let title: String
     let symbol: String
     let selected: Bool
@@ -247,9 +261,9 @@ private struct OnboardingPrivacyChoice: View {
                 Image(systemName: symbol).font(.system(size: 30, weight: .light))
                     .frame(height: 36).accessibilityHidden(true)
                 Text(title).font(.system(size: 15, weight: selected ? .medium : .regular))
-                Capsule().fill(selected ? Personalization.shared.accent : .clear).frame(width: 32, height: 2)
+                Capsule().fill(selected ? appearance.accent : .clear).frame(width: 32, height: 2)
             }
-            .foregroundStyle(selected ? Personalization.shared.accent : .secondary)
+            .foregroundStyle(selected ? appearance.accent : .secondary)
             .frame(maxWidth: .infinity).padding(.vertical, 10)
             .contentShape(Rectangle())
         }.buttonStyle(.plain)

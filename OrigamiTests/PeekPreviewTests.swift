@@ -1,0 +1,163 @@
+import Testing
+import WebKit
+import PDFKit
+@testable import Origami
+
+@MainActor struct PeekPreviewTests {
+    @Test func contentTypesHaveCapitalizedLabelsAndIcons() {
+        var preview = PeekPreview(url: URL(string: "https://example.invalid")!)
+        preview.category = "article"
+        #expect(preview.categoryTitle == "Article")
+        #expect(preview.categorySymbol == "doc.text")
+        preview.category = "technology"
+        #expect(preview.categoryTitle == "Technology")
+        #expect(preview.categorySymbol == "tag")
+        preview.category = ""
+        #expect(preview.categoryTitle.isEmpty)
+    }
+    @Test func datesUseReadableLocalizedFormatting() {
+        let locale = Locale(identifier: "en_US")
+        for input in ["2026-09-19T23:30:00.000Z", "2026-09-19T23:30:00Z", "2026-09-19"] {
+            #expect(PeekPreview.formattedDate(input, locale: locale) == "Sep 19, 2026")
+        }
+        #expect(PeekPreview.formattedDate("not a date", locale: locale) == nil)
+        #expect(PeekPreview.formattedDate("", locale: locale) == nil)
+    }
+    @Test func emptyDetailsRequireActualMetadata() {
+        var preview = PeekPreview(url: URL(string: "https://example.invalid")!)
+        preview.apply(["title": "Page title", "category": "website", "published": "invalid"])
+        #expect(!preview.hasDetails)
+        preview.headings = ["Topic"]
+        #expect(preview.hasDetails)
+        preview.headings = []; preview.author = "Author"
+        #expect(preview.hasDetails)
+    }
+    @Test func modesPersistAndOffPreventsPreview() {
+        let name = "Origami.PeekFixture." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = BrowserPreferences(defaults: defaults)
+        #expect(preferences.peekMode == .onDemand)
+        preferences.peekMode = .automatic
+        #expect(BrowserPreferences(defaults: defaults).peekMode == .automatic)
+        #expect(PeekMode.automatic.initialLayer == .structured)
+        #expect(PeekMode.onDemand.initialLayer == .normal)
+        let store = BrowserStore(preferences: preferences)
+        defer { store.dismissPeek(); store.pages.values.forEach { $0.dispose() } }
+        store.setPeekMode(.off)
+        store.openPeek(URL(string: "https://example.invalid/article")!)
+        #expect(store.peekPage == nil)
+        store.setPeekMode(.onDemand)
+        store.openPeek(URL(string: "https://example.invalid/report.pdf")!)
+        #expect(store.peekPage != nil)
+        #expect(store.peekPage?.webView.url == nil) // Document preview does not start WebKit downloads.
+        store.setPeekMode(.off)
+        #expect(store.peekPage == nil)
+    }
+    @Test func horizontalOnlyAndBoundaries() {
+        #expect(PeekLayer.normal.moved(horizontal: -80, vertical: 4) == .structured)
+        #expect(PeekLayer.structured.moved(horizontal: 80, vertical: 4) == .normal)
+        #expect(PeekLayer.normal.moved(horizontal: 80, vertical: 4) == .normal)
+        #expect(PeekLayer.normal.moved(horizontal: -40, vertical: 90) == .normal)
+        #expect(PeekLayer.normal.moved(horizontal: -15, vertical: 0) == .normal)
+    }
+    @Test func videoPlaybackLinksNeverShowPeek() {
+        for value in ["https://www.youtube.com/watch?v=fixture", "https://youtu.be/fixture",
+                      "https://youtube.com/shorts/fixture", "https://player.vimeo.com/video/123",
+                      "https://example.invalid/movie.m4v", "https://example.invalid/live.m3u8",
+                      "https://www.google.com/url?q=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dfixture"] {
+            #expect(!LinkPeekObserver.canPreview(URL(string: value)!))
+        }
+        #expect(LinkPeekObserver.canPreview(URL(string: "https://example.invalid/article-about-video")!))
+        #expect(LinkPeekObserver.canPreview(URL(string: "https://youtube.com/about")!))
+    }
+    @Test func documentRecognitionAndUnsafeLinks() {
+        #expect(PeekPreview.documentType(mime: "application/pdf") == "PDF")
+        #expect(PeekPreview.documentType(mime: "text/html") == nil)
+        for ext in ["pdf", "docx", "pages", "xlsx", "pptx", "key"] {
+            #expect(LinkPeekObserver.canPreview(URL(string: "https://example.com/file.\(ext)")!))
+        }
+        for text in ["file:///tmp/test.pdf", "javascript:alert(1)", "https://user:password@example.com/file.pdf", "https://example.com/file.zip"] {
+            #expect(!LinkPeekObserver.canPreview(URL(string: text)!))
+        }
+    }
+    @Test func sourceUsesLoadedDestinationAfterRedirect() {
+        let requested = URL(string: "https://search.example/url?q=destination")!
+        let destination = URL(string: "https://en.wikipedia.org/wiki/Apple_Inc.")!
+        let preview = PeekPreview(url: PeekPreview.destinationURL(loaded: destination, requested: requested))
+        #expect(preview.source == "en.wikipedia.org")
+        #expect(PeekPreview.destinationURL(loaded: nil, requested: requested) == requested)
+        #expect(PeekPreview.destinationURL(loaded: URL(string: "about:blank"), requested: requested) == requested)
+    }
+    @Test func detailImagesRemainCompactWithoutCroppingOrUpscaling() {
+        #expect(PeekPreview.imageSize(CGSize(width: 800, height: 400)) == CGSize(width: 96, height: 48))
+        #expect(PeekPreview.imageSize(CGSize(width: 400, height: 800)) == CGSize(width: 24, height: 48))
+        #expect(PeekPreview.imageSize(CGSize(width: 500, height: 500)) == CGSize(width: 48, height: 48))
+        #expect(PeekPreview.imageSize(CGSize(width: 16, height: 16)) == CGSize(width: 16, height: 16))
+        #expect(PeekPreview.imageSize(.zero) == .zero)
+    }
+    @Test func metadataBoundsAndUnsafeImages() {
+        var preview = PeekPreview(url: URL(string: "https://example.com/article")!)
+        preview.apply(["title": String(repeating: "x", count: 1000), "image": "file:///tmp/private", "headings": Array(repeating: "Heading", count: 20), "words": 441])
+        #expect(preview.title.count == 240 && preview.headings.count == 6)
+        #expect(preview.imageURL == nil && preview.minutes == 3)
+    }
+    @Test func extractsOpenGraphSchemaAndHeadingsWithoutAI() async throws {
+        let configuration = WKWebViewConfiguration(); configuration.websiteDataStore = .nonPersistent()
+        let web = WKWebView(frame: .zero, configuration: configuration)
+        defer { web.stopLoading() }
+        web.loadHTMLString("""
+        <title>Fallback title</title><meta property="og:title" content="Article title">
+        <meta property="og:image" content="/hero.png">
+        <script type="application/ld+json">{"@type":"Article","author":{"name":"Fixture Author"},"datePublished":"2026-01-02","description":"A deterministic overview."}</script>
+        <article><h2>First section</h2><p>\(String(repeating: "word ", count: 250))</p><h3>Second section</h3></article>
+        """, baseURL: URL(string: "https://example.invalid"))
+        for _ in 0..<100 {
+            if web.title == "Fallback title" && !web.isLoading { break }
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        let value = try #require(try await web.callAsyncJavaScript(PeekExtraction.script, arguments: [:], in: nil, contentWorld: .defaultClient) as? [String: Any])
+        var preview = PeekPreview(url: URL(string: "https://example.invalid/article")!); preview.apply(value)
+        #expect(preview.title == "Article title")
+        #expect(preview.author == "Fixture Author" && preview.published == "2026-01-02")
+        #expect(preview.overview == "A deterministic overview.")
+        #expect(preview.headings == ["First section", "Second section"])
+        #expect(preview.imageURL?.absoluteString == "https://example.invalid/hero.png")
+        #expect(preview.minutes == 2)
+    }
+    @Test func documentLoaderRejectsOversizeAndUnexpectedContent() async {
+        for (path, expected) in [("pdf", 128), ("large", 0), ("html", 0)] {
+            let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [PeekDocumentProtocol.self]
+            let data = await PeekDocumentLoader.load(url: URL(string: "https://example.invalid/" + path)!, pageURL: nil, userAgent: nil, configuration: config)
+            #expect(data?.count ?? 0 == expected)
+            #expect(config.httpCookieStorage == nil && config.urlCache == nil)
+        }
+    }
+    @Test func pdfMetadataUsesActualDocument() throws {
+        let document = PDFDocument()
+        let image = NSImage(size: NSSize(width: 30, height: 30))
+        image.lockFocus(); NSColor.white.setFill(); NSRect(x: 0, y: 0, width: 30, height: 30).fill(); image.unlockFocus()
+        document.insert(try #require(PDFPage(image: image)), at: 0)
+        document.documentAttributes = [PDFDocumentAttribute.titleAttribute: "Synthetic report", PDFDocumentAttribute.authorAttribute: "Fixture"]
+        let data = try #require(document.dataRepresentation())
+        let preview = PeekExtraction.pdf(data, fallback: PeekPreview(url: URL(string: "https://example.invalid/report.pdf")!))
+        #expect(preview.pageCount == 1 && preview.fileSize == Int64(data.count))
+        #expect(preview.title == "Synthetic report" && preview.author == "Fixture")
+    }
+}
+
+private final class PeekDocumentProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let path = request.url!.lastPathComponent
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: [
+            "Content-Type": path == "html" ? "text/html" : "application/pdf",
+            "Content-Length": path == "large" ? "9000000" : "128"
+        ])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(repeating: 0, count: 128))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}

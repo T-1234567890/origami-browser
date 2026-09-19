@@ -1,10 +1,12 @@
 import AppKit
 import WebKit
 import Observation
+import SecurityInterface
 
 @MainActor @Observable
 final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     @ObservationIgnored let linkPeekObserver = LinkPeekObserver()
+    let highlighter = WebHighlighterController()
     let webView: WKWebView
     var destinationHistory = TabDestinationHistory()
     var nativeRevision = 0
@@ -45,6 +47,24 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     var progress = 0.0
     var canGoBack = false
     var canGoForward = false
+    private var securityCommitted = false
+    private var connectionRevision = 0
+    var connectionSecurity: ConnectionSecurity {
+        _ = connectionRevision
+        guard nativePage == nil, let url = currentURL else { return .local }
+        if isLoading { return .checking }
+        if !securityCommitted { return .unverified }
+        if url.scheme == "http" { return .insecure }
+        guard url.scheme == "https" else { return .local }
+        guard webView.serverTrust != nil else { return .unverified }
+        return webView.hasOnlySecureContent ? .secure : .mixed
+    }
+    var canViewCertificate: Bool { securityCommitted && currentURL?.scheme == "https" && webView.serverTrust != nil && !isLoading }
+    func viewCertificate() {
+        guard canViewCertificate, let trust = webView.serverTrust, let window = webView.window,
+              let certificates = SecTrustCopyCertificateChain(trust) as? [SecCertificate] else { return }
+        SFCertificatePanel.shared().beginSheet(for: window, modalDelegate: nil, didEnd: nil, contextInfo: nil, certificates: certificates, showGroup: true)
+    }
     var errorMessage: String?
     var favicon: NSImage?
     @ObservationIgnored private var requestedURL: URL?
@@ -67,9 +87,11 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
          profileID: UUID = BrowserProfile.defaultID, tabID: UUID = UUID()) {
         self.services = services; self.profileID = profileID; self.tabID = tabID
         let configuration = suppliedConfiguration ?? WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.preferredHTTPSNavigationPolicy = HTTPSFirst.policy(enabled: services?.httpsFirstEnabled ?? true)
         configuration.applicationNameForUserAgent = Self.browserIdentity
         configuration.websiteDataStore = (try? services?.websiteStore(profileID: profileID)) ?? .nonPersistent()
         configuration.userContentController = WKUserContentController()
+        services?.blocking.attach(configuration.userContentController)
         configuration.userContentController.addUserScript(WKUserScript(source: ActivityScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         configuration.userContentController.addUserScript(WKUserScript(source: MediaSessionScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         ScriptRuntime.install((try? services?.power.scripts(profileID)) ?? [], controller: configuration.userContentController)
@@ -78,6 +100,8 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         super.init()
         configuration.userContentController.add(linkPeekObserver, contentWorld: LinkPeekObserver.world, name: "origamiLinkHover")
         configuration.userContentController.addUserScript(WKUserScript(source: LinkPeekObserver.source, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: LinkPeekObserver.world))
+        highlighter.allowed = { [weak self] in self?.isPassivePreview == false && self?.nativePage == nil && self?.readerVisible == false }
+        highlighter.install(on: webView, manager: services?.highlighter, profile: profileID)
         mediaObserver.webView = webView
         mediaObserver.changed = { [weak self] in self?.refreshMediaState() }
         configuration.userContentController.add(mediaObserver, name: "origamiMedia")
@@ -87,6 +111,8 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // Public WebKit inspection is enabled in release builds too, including popup tabs.
         webView.isInspectable = true
         observations = [
+            webView.observe(\.serverTrust, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
+            webView.observe(\.hasOnlySecureContent, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
             webView.observe(\.title, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
             webView.observe(\.url, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
             webView.observe(\.isLoading, options: [.new]) { [weak self] _, _ in self?.scheduleUpdate() },
@@ -145,6 +171,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         Task { @MainActor [weak self] in self?.update() }
     }
     private func update() {
+        connectionRevision += 1
         let suspend = nativePage != nil
         webView.isInspectable = !suspend
         if mediaPlaybackSuspended != suspend {
@@ -179,6 +206,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webHistoryItems = webHistoryItems.filter { ids.contains($0.key) }
     }
     func load(_ url: URL) {
+        securityCommitted = false
         errorMessage = nil; dismissDialog()
         let entry = destinationHistory.visit(url)
         requestedURL = url
@@ -192,6 +220,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     func goForward() { traverse(1) }
     private func traverse(_ direction: Int) {
         guard let entry = destinationHistory.move(direction) else { return }
+        securityCommitted = false
         resetDocuments()
         errorMessage = nil; dismissDialog(); requestedURL = entry.url
         if InternalRoute.page(for: entry.url) != nil {
@@ -218,9 +247,11 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if withoutCache { view.reloadFromOrigin() } else { view.reload() }
     }
     func resetDocuments() {
+        highlighter.reset()
         documentTask?.cancel(); documentGeneration = UUID(); article = nil; readerVisible = false; jsonText = nil; discoveredFeeds = []; responseDetails = nil; navigationStarted = Date()
     }
     func dispose() {
+        highlighter.dispose()
         documentTask?.cancel()
         dismissDialog()
         mediaTask?.cancel()
@@ -237,6 +268,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         onChange = nil; openTab = nil; createPopup = nil
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        securityCommitted = false
         resetDocuments()
         errorMessage = nil; favicon = nil; faviconTask?.cancel(); faviconLoading = false; update()
     }
@@ -244,6 +276,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         documentGeneration = UUID(); documentTask?.cancel()
         article = nil; readerVisible = false; jsonText = nil; discoveredFeeds = []
         guard nativePage == nil else { return }
+        securityCommitted = true
         recordWebNavigation()
         scheduleDocumentDiscovery()
         mediaObserver.reset()
@@ -268,7 +301,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         scheduleDocumentDiscovery()
 
         if let url = webView.url {
-            do { if services?.isPrivate != true { try services?.history.record(url, title: webView.title ?? url.host ?? "", profileID: profileID) } }
+            do { if !isPassivePreview && services?.isPrivate != true { try services?.history.record(url, title: webView.title ?? url.host ?? "", profileID: profileID) } }
             catch { onServiceError?("History could not be saved: \(error.localizedDescription)") }
         }
     }
@@ -283,13 +316,27 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // WKWebView still emits this legacy WebKit policy-interruption error (102).
         // A cancelled policy decision is not a failed network request.
         let policyInterrupted = error.domain == "WebKitErrorDomain" && error.code == 102
-        if !cancelled && !policyInterrupted { errorMessage = error.localizedDescription }
+        if !cancelled && !policyInterrupted {
+            securityCommitted = false
+            errorMessage = error.localizedDescription
+        }
         update()
     }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard nativePage == nil else { return }
         errorMessage = "This page stopped responding. Reload to continue."
         update()
+    }
+    func applyConnectionPolicy(to preferences: WKWebpagePreferences) {
+        preferences.preferredHTTPSNavigationPolicy = HTTPSFirst.policy(enabled: services?.httpsFirstEnabled ?? true)
+    }
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 preferences: WKWebpagePreferences,
+                 decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+        applyConnectionPolicy(to: preferences)
+        self.webView(webView, decidePolicyFor: navigationAction) { policy in
+            decisionHandler(policy, preferences)
+        }
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -311,7 +358,10 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                     requestedURL = url
                     update()
                 }
-                decisionHandler(.allow)
+                Task { @MainActor [weak self] in
+                    await self?.services?.blocking.prepare()
+                    decisionHandler(self == nil ? .cancel : .allow)
+                }
             }
         } else {
             decisionHandler(.cancel)

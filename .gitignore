@@ -68,3 +68,8 @@ id_ed25519
 /Configuration/Release.generated.xcconfig
 __pycache__/
 /scripts/release/.venv/
+
+# Optional downloaded filter data and locally converted derivatives (never bundle)
+DownloadedFilters/
+easylist.txt
+easyprivacy.txt

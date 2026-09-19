@@ -1,9 +1,28 @@
 import Foundation
+import AppKit
 import Testing
 @testable import Origami
 
 @MainActor
 struct NativeDestinationTests {
+    @Test(arguments: InternalPage.allCases)
+    func nativePageSymbolIsAvailable(_ page: InternalPage) {
+        #expect(NSImage(systemSymbolName: page.symbol, accessibilityDescription: nil) != nil)
+    }
+
+    @Test func scriptsOpenInANativeTabWithoutReplacingCurrentTab() throws {
+        let store = BrowserStore()
+        defer { store.pages.values.forEach { $0.dispose() } }
+        let original = try #require(store.session.selectedTabID)
+        let count = store.session.tabs.count
+        store.openInternal(.scripts)
+        #expect(store.session.tabs.count == count + 1)
+        #expect(store.session.tabs.contains { $0.id == original })
+        #expect(store.session.selectedTabID != original)
+        #expect(store.selectedPage?.nativePage == .scripts)
+        #expect(store.selectedPage?.currentURL == URL(string: "origami://scripts"))
+    }
+
     @Test func mixedHistoryTruncatesForwardEntries() {
         var history = TabDestinationHistory()
         let first = history.visit(InternalPage.newtab.url)
