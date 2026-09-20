@@ -6,7 +6,9 @@ import Darwin
 enum DatabaseStorageProtection {
     enum Failure: LocalizedError {
         case inaccessible
-        var errorDescription: String? { "Origami could not secure its database storage. Check the storage location and permissions." }
+        var errorDescription: String? {
+        L10n.string("Origami could not secure its database storage. Check the storage location and permissions.")
+    }
     }
     static func prepare(_ file: URL) throws {
         guard file.isFileURL else { throw Failure.inaccessible }

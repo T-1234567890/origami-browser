@@ -23,7 +23,7 @@ struct AIContextSheet: View {
     private var candidates: [BrowserTab] { store.session.tabs.filter { store.loadedPage(for: $0.id)?.nativePage == nil && store.loadedPage(for: $0.id) != nil && $0.url?.scheme?.hasPrefix("http") == true } }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(action.rawValue).font(.headline)
+            Text(L10n.string(action.rawValue)).font(.headline)
             if action == .compare {
                 Text("Choose 2–6 loaded tabs.").font(.caption).foregroundStyle(.secondary)
                 ScrollView { ForEach(candidates) { tab in Toggle(tab.title, isOn: Binding(get: { selected.contains(tab.id) }, set: { if $0 { selected.insert(tab.id) } else { selected.remove(tab.id) } })) } }.frame(maxHeight: 180)
@@ -32,7 +32,7 @@ struct AIContextSheet: View {
             TextField("Question or focus (optional)", text: $query)
             Text("Sends your question and the selected text or page excerpts to \(AISettings.shared.provider.rawValue). Web verification may also use the provider’s search service.").font(.caption).foregroundStyle(.secondary)
             }
-            if store.isPrivate { Text("Private: kept in memory by Origami; the provider still receives this request.").font(.caption).foregroundStyle(.secondary) }
+            if store.isPrivate { Text(L10n.string("Private: kept in memory by Origami; the provider still receives this request.")).font(.caption).foregroundStyle(.secondary) }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
             HStack {
                 Spacer(); Button("Cancel") { dismiss() }
@@ -67,7 +67,7 @@ struct AIContextSheet: View {
                 let id = store.newTab()
                 store.services?.ai.start(AIRequest(query: question.isEmpty ? action.rawValue + ": " + contexts.map(\.title).joined(separator: ", ") : String(question.prefix(12000)), mode: mode, action: action, contexts: contexts, model: model), tab: id, profile: store.session.profileID)
                 dismiss()
-            } catch { self.error = (error as? AIError)?.localizedDescription ?? "Could not read the selected page content." }
+            } catch { self.error = (error as? AIError)?.localizedDescription ?? L10n.string("Could not read the selected page content.") }
             busy = false
         }
     }
@@ -103,8 +103,8 @@ private struct PeekAIAssessment: View {
             Text(action == .peek ? "Page Summary" : "Credibility").font(.caption.bold())
             if let event {
                 if action == .credibility {
-                    Text(event.credibility?.rawValue ?? CredibilityState.unknown.rawValue).font(.subheadline.bold())
-                    Text("AI-assisted assessment, not a verdict on every claim.").font(.caption2).foregroundStyle(.secondary)
+                    Text(L10n.string(event.credibility?.rawValue ?? CredibilityState.unknown.rawValue)).font(.subheadline.bold())
+                    Text(L10n.string("AI-assisted assessment, not a verdict on every claim.")).font(.caption2).foregroundStyle(.secondary)
                 }
                 Text(event.answerV1?.summary ?? "").font(.caption).textSelection(.enabled)
                 ForEach(event.answerV1?.sources ?? [], id: \.id) { source in
@@ -167,7 +167,7 @@ struct AISearchHistory: View {
                             if selecting { if !selected.insert(event.id).inserted { selected.remove(event.id) }; return }
                             let id = store.newTab()
                             store.services?.ai.events[id] = event
-                            do { try store.services?.ai.repository.save(event, profile: store.session.profileID, tab: id) } catch { store.persistenceError = "Could not restore the saved answer." }
+                            do { try store.services?.ai.repository.save(event, profile: store.session.profileID, tab: id) } catch { store.persistenceError = L10n.string("Could not restore the saved answer.") }
                         }.buttonStyle(.plain)
                         Spacer(); Text(event.date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary)
                     }
@@ -178,9 +178,9 @@ struct AISearchHistory: View {
                     Button("Cancel", role: .cancel) { }
                     Button("Delete", role: .destructive) {
                         do { try store.services?.ai.deleteHistory(selected, profile: store.session.profileID); selecting = false; selected = []; reload() }
-                        catch { store.persistenceError = "Could not delete the selected history." }
+                        catch { store.persistenceError = L10n.string("Could not delete the selected history.") }
                     }
-                } message: { Text("Their prompts, answers, references, visuals, and versions will be permanently deleted. This cannot be undone.") }
+                } message: { Text(L10n.string("Their prompts, answers, references, visuals, and versions will be permanently deleted. This cannot be undone.")) }
         }
     }
     private func reload() { events = (try? store.services?.ai.repository.list(profile: store.session.profileID)) ?? []; selected.formIntersection(Set(events.map(\.id))) }

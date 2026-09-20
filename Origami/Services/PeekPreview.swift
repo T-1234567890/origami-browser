@@ -6,7 +6,7 @@ import PDFKit
 enum PeekMode: String, CaseIterable, Identifiable {
     case off, onDemand, automatic
     var id: Self { self }
-    var title: String { switch self { case .off: "Off"; case .onDemand: "On Demand"; case .automatic: "Automatic" } }
+    var title: String { switch self { case .off: L10n.string("Off"); case .onDemand: L10n.string("On Demand"); case .automatic: L10n.string("Automatic") } }
     var initialLayer: PeekLayer { self == .automatic ? .structured : .normal }
 }
 enum PeekLayer: Int { case normal, structured
@@ -49,7 +49,7 @@ struct PeekPreview: Equatable {
         minutes != nil || fileType != nil || imageURL != nil || (!category.isEmpty && category != "website" && category != "WebPage")
     }
     var formattedDate: String? {
-        Self.formattedDate(published)
+        Self.formattedDate(published, locale: L10n.locale)
     }
     static func formattedDate(_ text: String, locale: Locale = .current) -> String? {
         guard !text.isEmpty else { return nil }
@@ -76,12 +76,12 @@ struct PeekPreview: Equatable {
     static func documentType(mime: String?) -> String? {
         switch mime?.lowercased() {
         case "application/pdf": "PDF"
-        case "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word document"
-        case "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Spreadsheet"
-        case "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation": "Presentation"
-        case "application/vnd.apple.pages": "Pages document"
-        case "application/vnd.apple.numbers": "Numbers spreadsheet"
-        case "application/vnd.apple.keynote": "Keynote presentation"
+        case "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document": L10n.string("Word document")
+        case "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": L10n.string("Spreadsheet")
+        case "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation": L10n.string("Presentation")
+        case "application/vnd.apple.pages": L10n.string("Pages document")
+        case "application/vnd.apple.numbers": L10n.string("Numbers spreadsheet")
+        case "application/vnd.apple.keynote": L10n.string("Keynote presentation")
         default: nil
         }
     }

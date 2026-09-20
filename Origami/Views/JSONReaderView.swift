@@ -39,7 +39,7 @@ struct JSONReaderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Picker("JSON view", selection: $mode) { ForEach(["Pretty", "Tree", "Raw"], id: \.self) { Text($0) } }.pickerStyle(.segmented).frame(width: 230)
+                Picker("JSON view", selection: $mode) { ForEach(["Pretty", "Tree", "Raw"], id: \.self) { Text(L10n.string($0)) } }.pickerStyle(.segmented).frame(width: 230)
                 TextField("Find in JSON", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 240)
                 Spacer()
                 Button("Copy JSON") { copy(raw) }

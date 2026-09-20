@@ -11,7 +11,7 @@ import Observation
         else { lastAttempt = nil }
         changed()
     } }
-    var contentExcludedSites: [String] { preferences.blockingExceptions(.content) }
+    var contentExcludedSites: [String] { _ = revision; return preferences.blockingExceptions(.content) }
     func saveContentExcludedSites(_ text: String) throws {
         let hosts = Array(Set(text.components(separatedBy: .newlines).map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -26,8 +26,8 @@ import Observation
         guard domains.count <= 500, domains.allSatisfy(FilterConverter.validHost) else { throw FilterDownloads.Failure.invalidResponse }
         preferences.contentBlockingDomains = domains; changed()
     }
-    private(set) var status = "Off"
-    private(set) var contentStatus = "Off"
+    private(set) var status = L10n.string("Off")
+    private(set) var contentStatus = L10n.string("Off")
     private(set) var updating = false
     private(set) var updateProgress: Double?
     private(set) var updateStage = ""
@@ -144,28 +144,28 @@ import Observation
             do {
                 let list = try await compile(UserContentRules.rules(domains: contentDomains), kind: .content)
                 guard generation == revision, !Task.isCancelled else { discard(list); return }
-                install(list, kind: .content); contentStatus = "On — \(contentDomains.count) custom domains"
-            } catch { contentStatus = "Content rules couldn’t be prepared." }
+                install(list, kind: .content); contentStatus = L10n.format("On — %lld custom domains", Int64(contentDomains.count))
+            } catch { contentStatus = L10n.string("Content rules couldn’t be prepared.") }
         } else {
             if let old = lists.removeValue(forKey: .content) {
                 for controller in controllers.allObjects { controller.remove(old) }
                 discard(old)
             }
-            contentStatus = contentEnabled ? "No custom rules. Nothing is blocked." : "Off"
+            contentStatus = contentEnabled ? L10n.string("No custom rules. Nothing is blocked.") : L10n.string("Off")
         }
         if adsEnabled, let snapshot {
             do {
                 let list = try await compile(snapshot.rules, kind: .ads)
                 guard generation == revision, !Task.isCancelled else { discard(list); return }
                 install(list, kind: .ads)
-                status = "Updated " + snapshot.updated.formatted(date: .abbreviated, time: .omitted) + ". Unsupported rules skipped: \(snapshot.skipped)."
-            } catch { status = "Ad rules couldn’t be prepared. Existing rules remain active if available." }
-        } else { status = adsEnabled ? "Preparing filter lists…" : "Off" }
+                status = L10n.format("Updated %@. Unsupported rules skipped: %lld.", snapshot.updated.formatted(.dateTime.year().month().day().locale(L10n.locale)), Int64(snapshot.skipped))
+            } catch { status = L10n.string("Ad rules couldn’t be prepared. Existing rules remain active if available.") }
+        } else { status = adsEnabled ? L10n.string("Preparing filter lists…") : L10n.string("Off") }
     }
     func refreshIfNeeded(force: Bool = false) {
         guard adsEnabled, updateTask == nil,
               force || (Date().timeIntervalSince(snapshot?.updated ?? .distantPast) >= 86400 && Date().timeIntervalSince(lastAttempt ?? .distantPast) >= 3600) else { return }
-        lastAttempt = Date(); updating = true; updateProgress = nil; updateStage = "Connecting…"
+        lastAttempt = Date(); updating = true; updateProgress = nil; updateStage = L10n.string("Connecting…")
         updateTask = Task { [weak self] in
             guard let self else { return }
             var retryForChangedSettings = false
@@ -177,7 +177,7 @@ import Observation
                 var originals: [String] = []
                 for (index, url) in FilterDownloads.sources.enumerated() {
                     updateProgress = nil
-                    updateStage = index == 0 ? "Downloading EasyList (1 of 2)…" : "Downloading EasyPrivacy (2 of 2)…"
+                    updateStage = index == 0 ? L10n.string("Downloading EasyList (1 of 2)…") : L10n.string("Downloading EasyPrivacy (2 of 2)…")
                     if let downloader { originals.append(try await downloader(url)) }
                     else {
                         originals.append(try await FilterDownloads.fetch(url) { [weak self] fraction in
@@ -185,12 +185,12 @@ import Observation
                         })
                     }
                 }
-                updateProgress = nil; updateStage = "Converting filters…"
+                updateProgress = nil; updateStage = L10n.string("Converting filters…")
                 let input = originals
                 let conversion = try await Task.detached(priority: .utility) { try FilterConverter.convert(input) }.value
                 let candidate = FilterSnapshot(originals: originals, rules: conversion.rules, updated: Date(), skipped: conversion.skipped, attribution: FilterDownloads.notice)
                 // Compile first; a malformed update never replaces the last working snapshot.
-                updateStage = "Compiling filters…"
+                updateStage = L10n.string("Compiling filters…")
                 let generation = revision
                 let list = try await compile(candidate.rules, kind: .ads)
                 guard generation == revision, adsEnabled else {
@@ -204,9 +204,9 @@ import Observation
                     try data.write(to: directory.appending(path: "filters.json"), options: .atomic)
                 } catch { discard(list); throw error }
                 snapshot = candidate; install(list, kind: .ads)
-                status = "Updated " + candidate.updated.formatted(date: .abbreviated, time: .omitted) + ". Unsupported rules skipped: \(candidate.skipped)."
+                status = L10n.format("Updated %@. Unsupported rules skipped: %lld.", candidate.updated.formatted(.dateTime.year().month().day().locale(L10n.locale)), Int64(candidate.skipped))
             } catch {
-                if adsEnabled { status = lists[.ads] == nil ? "Download or compilation failed. No ad rules are active yet." : "Update failed. Keeping the last working ad rules." }
+                if adsEnabled { status = lists[.ads] == nil ? L10n.string("Download or compilation failed. No ad rules are active yet.") : L10n.string("Update failed. Keeping the last working ad rules.") }
             }
         }
     }

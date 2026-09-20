@@ -20,6 +20,8 @@ struct NativeSettings: View {
     @Environment(\.profileAppearance) private var appearance
     let model: InternalContentModel
     private var category: SettingsCategory { SettingsCategory(rawValue: model.store.settingsCategory) ?? .general }
+    @State private var language = LanguageManager.shared
+    @State private var pendingLanguage: AppLanguage?
     @State private var layout = TabLayout.horizontal
     @State private var engine = SearchEngine.google
     @State private var restore = true
@@ -43,7 +45,7 @@ struct NativeSettings: View {
                 HStack(spacing: 6) {
                     ForEach(SettingsCategory.allCases) { item in
                         Button { model.store.settingsCategory = item.rawValue } label: {
-                            Label(item.rawValue, systemImage: item.icon)
+                            Label(L10n.string(item.rawValue), systemImage: item.icon)
                                 .font(.system(size: 12, weight: category == item ? .semibold : .regular))
                                 .padding(.horizontal, 12).padding(.vertical, 9)
                                 .foregroundStyle(category == item ? appearance.accent : Color.secondary)
@@ -63,10 +65,10 @@ struct NativeSettings: View {
             Divider()
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(category.rawValue).font(.title2.weight(.semibold))
+                    Text(L10n.string(category.rawValue)).font(.title2.weight(.semibold))
                     if let scopeLabel {
-                        Label(scopeLabel, systemImage: scopeLabel == "Synchronized with default profile" ? "arrow.triangle.2.circlepath" : "person.crop.circle").font(.caption).foregroundStyle(.secondary)
-                            .help(category == .tabs ? "Applies to tab layout. Other options on this page remain shared." : scopeLabel == "Synchronized with default profile" ? "These settings are shared with the default profile." : "These settings apply to this profile.")
+                        Label(scopeLabel, systemImage: scopeLabel == L10n.string("Synchronized with default profile") ? "arrow.triangle.2.circlepath" : "person.crop.circle").font(.caption).foregroundStyle(.secondary)
+                            .help(category == .tabs ? L10n.string("Applies to tab layout. Other options on this page remain shared.") : scopeLabel == L10n.string("Synchronized with default profile") ? L10n.string("These settings are shared with the default profile.") : L10n.string("These settings apply to this profile."))
                     }
                 }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 8)
                 if category == .ai { AISettingsView(store: model.store) } else {
@@ -75,6 +77,13 @@ struct NativeSettings: View {
                     case .ai: EmptyView()
                     case .appearance: AppearanceSettings(layout: model.store.session.layout)
                     case .general:
+                        Section("Language") {
+                            Picker("App Language", selection: Binding(get: { language.selection }, set: {
+                                if $0 != language.selection { pendingLanguage = $0 }
+                            })) {
+                                ForEach(AppLanguage.allCases) { Text(verbatim: $0.nativeName).tag($0) }
+                            }
+                        }
                         Section("Global Shortcuts") { GlobalShortcutSettings(store: model.store) }
                         Section {
                             Toggle("Restore previous session", isOn: setting($restore, key: "restore"))
@@ -92,7 +101,7 @@ struct NativeSettings: View {
                             Picker("Link previews", selection: Binding(get: { model.store.peekMode }, set: { model.store.setPeekMode($0) })) {
                                 ForEach(PeekMode.allCases) { Text($0.title).tag($0) }
                             }
-                            Text("On Demand starts with a preview; swipe horizontally for details. Automatic starts with details. No AI is used.")
+                            Text(L10n.string("On Demand starts with a preview; swipe horizontally for details. Automatic starts with details. No AI is used."))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if let manager = model.store.services?.highlighter { WebHighlighterSettings(manager: manager) }
@@ -124,7 +133,7 @@ struct NativeSettings: View {
                             Toggle("Show suggestions from Brave", isOn: setting($braveSuggestions, key: "braveSuggestions"))
                             Toggle("Allow suggestions in Private Browsing", isOn: setting($privateBraveSuggestions, key: "privateBraveSuggestions"))
                         } footer: {
-                            Text("Text you type may be sent to Brave to provide search suggestions.")
+                            Text(L10n.string("Text you type may be sent to Brave to provide search suggestions."))
                         }
                     case .downloads:
                         Section {
@@ -136,12 +145,12 @@ struct NativeSettings: View {
                             Picker("Keep history for", selection: Binding(get: { retentionDays }, set: { days in
                                 retentionDays = days; model.store.preferences.historyRetentionDays = days
                                 do { try (model.store.application?.services ?? model.store.services)?.runHistoryCleanup() }
-                                catch { model.store.persistenceError = "History cleanup could not finish." }
+                                catch { model.store.persistenceError = L10n.string("History cleanup could not finish.") }
                             })) {
                                 Text("30 days").tag(30); Text("90 days").tag(90); Text("180 days").tag(180); Text("1 year").tag(365); Text("Never").tag(0)
                             }.pickerStyle(.radioGroup)
                         } header: { Text("Automatically delete history") } footer: {
-                            Text("Applies to browsing history, recently closed tabs, and inactive Ask histories across profiles. Cookies, website data, bookmarks and downloads are kept. Shortening this period deletes older history immediately.")
+                            Text(L10n.string("Applies to browsing history, recently closed tabs, and inactive Ask histories across profiles. Cookies, website data, bookmarks and downloads are kept. Shortening this period deletes older history immediately."))
                         }
                         Section {
                             Toggle("Block pop-ups and autoplay by default", isOn: setting($strict, key: "privacy", encode: { $0 ? "strict" : "standard" }))
@@ -150,7 +159,7 @@ struct NativeSettings: View {
                             Toggle("HTTPS-First", isOn: Binding(get: { model.store.preferences.httpsFirst }, set: {
                                 model.store.preferences.httpsFirst = $0; model.store.preferencesRevision += 1
                             }))
-                            Text("Try an encrypted connection first. If HTTPS is unavailable, block the page until you choose to continue over HTTP. Disabling this does not bypass certificate errors.").font(.callout).foregroundStyle(.secondary)
+                            Text(L10n.string("Try an encrypted connection first. If HTTPS is unavailable, block the page until you choose to continue over HTTP. Disabling this does not bypass certificate errors.")).font(.callout).foregroundStyle(.secondary)
                         }
                         if let blocking = model.store.services?.blocking { BlockingSettings(service: blocking) }
                         Section("Website Data & Permissions") {
@@ -170,6 +179,18 @@ struct NativeSettings: View {
             .scrollContentBackground(.hidden)
             .scrollIndicators(.hidden)
         }
+        .alert("Change App Language?", isPresented: Binding(
+            get: { pendingLanguage != nil },
+            set: { if !$0 { pendingLanguage = nil } }
+        ), presenting: pendingLanguage) { proposed in
+            Button("Cancel", role: .cancel) { pendingLanguage = nil }
+            Button("Change Language") {
+                language.selection = proposed
+                pendingLanguage = nil
+            }
+        } message: { proposed in
+            Text(L10n.format("Change Origami’s language to %@? This applies immediately. Your open tabs and playback will continue.", proposed.nativeName))
+        }
         .task {
             guard let values = await model.call("settings.read") as? [String: Any] else { return }
             layout = model.store.session.layout; engine = model.store.session.searchEngine
@@ -185,9 +206,9 @@ struct NativeSettings: View {
 
     private func actionRow(_ title: String, action: String, perform: @escaping () -> Void) -> some View {
         HStack {
-            Text(title).font(.body)
+            Text(L10n.string(title)).font(.body)
             Spacer(minLength: 16)
-            Button(action, action: perform)
+            Button(L10n.string(action), action: perform)
         }
     }
 
@@ -217,7 +238,7 @@ struct NativeProfiles: View {
     @State private var busy = false
     var body: some View {
         InternalContent(title: "Profiles") {
-            Text("Choose what each profile keeps separate or shares with the default profile. Tabs always stay separate.").foregroundStyle(.secondary)
+            Text(L10n.string("Choose what each profile keeps separate or shares with the default profile. Tabs always stay separate.")).foregroundStyle(.secondary)
             ForEach(profiles) { profile in
                 HStack(spacing: 12) {
                     Circle().fill(profile.color.tint).frame(width: 12, height: 12)
@@ -231,7 +252,7 @@ struct NativeProfiles: View {
                     Button { deleting = profile } label: { Image(systemName: "trash") }
                         .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Delete " + profile.name)
                         .disabled(profile.id == BrowserProfile.defaultID)
-                        .help(profile.id == BrowserProfile.defaultID ? "The default profile cannot be deleted." : "Delete profile")
+                        .help(profile.id == BrowserProfile.defaultID ? L10n.string("The default profile cannot be deleted.") : "Delete profile")
                 }.padding(.vertical, 6)
                 Divider()
             }
@@ -257,15 +278,15 @@ struct NativeProfiles: View {
                     ForEach(ProfileDataKind.allCases) { kind in
                         Toggle(kind.title, isOn: Binding(get: { sharing[kind] }, set: { sharing[kind] = $0 }))
                     }
-                    Text("Sharing uses the default profile’s data without merging or deleting this profile’s own data. Turn sharing off to return to its own data. Deleting shared history or bookmarks affects all profiles using it.")
+                    Text(L10n.string("Sharing uses the default profile’s data without merging or deleting this profile’s own data. Turn sharing off to return to its own data. Deleting shared history or bookmarks affects all profiles using it."))
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Changing website sharing reloads this profile’s open pages. Save any unfinished forms first.")
+                    Text(L10n.string("Changing website sharing reloads this profile’s open pages. Save any unfinished forms first."))
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text("The default profile is the shared destination. Other profiles choose which categories to share with it.")
+                    Text(L10n.string("The default profile is the shared destination. Other profiles choose which categories to share with it."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Open tabs, pins and tab groups stay separate. AI and search settings remain global.")
+                Text(L10n.string("Open tabs, pins and tab groups stay separate. AI and search settings remain global."))
                     .font(.caption).foregroundStyle(.secondary)
                 HStack { Spacer(); Button("Cancel") { showEditor = false }; Button("Save") {
                     perform {
@@ -293,7 +314,7 @@ struct NativeProfiles: View {
                 }
             }
         } message: {
-            Text("This closes this profile’s windows and deletes its own website data, history, bookmarks, permissions, and saved tabs. Shared Personal data and downloaded files remain.")
+            Text(L10n.string("This closes this profile’s windows and deletes its own website data, history, bookmarks, permissions, and saved tabs. Shared Personal data and downloaded files remain."))
         }
     }
     private func refresh() { perform { profiles = try model.store.services?.profiles.list() ?? [] } }

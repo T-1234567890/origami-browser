@@ -32,11 +32,11 @@ enum MigrationFailure: Error, LocalizedError {
     case invalid, tooLarge, unsupported, sharedDestination, destinationOpen
     var errorDescription: String? {
         switch self {
-        case .invalid: "The selected data is malformed or unreadable. Quit the source browser and try an exported copy."
-        case .tooLarge: "This import exceeds the supported size limit. Export a smaller set of data."
-        case .unsupported: "No supported browser data was found. Choose a profile folder or an exported bookmarks HTML file."
-        case .sharedDestination: "Choose a separate destination profile. This profile shares bookmarks or history with another profile."
-        case .destinationOpen: "Close other windows for the destination profile before replacing its data."
+        case .invalid: L10n.string("The selected data is malformed or unreadable. Quit the source browser and try an exported copy.")
+        case .tooLarge: L10n.string("This import exceeds the supported size limit. Export a smaller set of data.")
+        case .unsupported: L10n.string("No supported browser data was found. Choose a profile folder or an exported bookmarks HTML file.")
+        case .sharedDestination: L10n.string("Choose a separate destination profile. This profile shares bookmarks or history with another profile.")
+        case .destinationOpen: L10n.string("Close other windows for the destination profile before replacing its data.")
         }
     }
 }

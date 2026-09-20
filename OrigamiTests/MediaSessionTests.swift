@@ -162,6 +162,58 @@ struct MediaSessionTests {
         #expect(state.artworkURL?.lastPathComponent == "good.png")
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func slidingLiveWindowPublishesInfinitePositionAndResetsForVOD() async throws {
+        let page = makePage()
+        defer { page.dispose() }
+        try await ready(page)
+        #expect(page.webView.configuration.preferences.isElementFullscreenEnabled)
+        let initialWindow = Self.startMedia
+            .replacingOccurrences(of: "time:0,duration:5", with: "time:0,duration:100")
+            .replacingOccurrences(of: "start:()=>0,end:()=>5", with: "start:()=>10,end:()=>100")
+        _ = try await page.webView.callAsyncJavaScript(initialWindow, arguments: [:], in: nil, contentWorld: .page)
+        _ = try await page.webView.evaluateJavaScript("""
+            window.liveStart=10; window.liveEnd=100;
+            window.fixturePlayback.duration=100;
+            navigator.mediaSession.setPositionState = state => { window.publishedPosition=state; };
+            Object.defineProperty(document.querySelector('audio'), 'seekable', {get:()=>({length:1,start:()=>window.liveStart,end:()=>window.liveEnd})});
+            document.querySelector('audio').dispatchEvent(new Event('durationchange')); true;
+            """)
+        #expect(!(await MediaStateService().sample(page.webView)).isLive)
+        _ = try await page.webView.evaluateJavaScript("""
+            window.liveStart=11;window.liveEnd=101;window.fixturePlayback.duration=101;
+            document.querySelector('audio').dispatchEvent(new Event('durationchange')); true;
+            """)
+        try await wait { page.mediaState.isLive }
+        #expect(page.mediaState.duration == nil && !page.mediaState.canSeek)
+        #expect(try await page.webView.evaluateJavaScript("window.publishedPosition?.duration === Infinity") as? Bool == true)
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('audio').remove();true")
+        try await wait { !page.mediaState.isRelevant }
+        #expect(try await page.webView.evaluateJavaScript("window.publishedPosition === undefined") as? Bool == true)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func youtubeVisibleLiveBadgeOverridesFiniteDVRDuration() async throws {
+        let page = makePage()
+        defer { page.dispose() }
+        try await ready(page)
+        page.webView.loadHTMLString("""
+            <title>YouTube live fixture</title>
+            <div class="html5-video-player"><video muted></video>
+            <span class="ytp-live-badge" style="display:none">Live</span></div>
+            """, baseURL: URL(string: "https://www.youtube.com/watch?v=fixture")!)
+        try await wait { page.webView.title == "YouTube live fixture" && !page.isLoading }
+        _ = try await page.webView.callAsyncJavaScript(Self.startMedia.replacingOccurrences(of: "querySelector('audio')", with: "querySelector('video')"), arguments: [:], in: nil, contentWorld: .page)
+        #expect(!(await MediaStateService().sample(page.webView)).isLive)
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('.ytp-live-badge').style.display='inline';true")
+        let live = await MediaStateService().sample(page.webView)
+        #expect(live.isLive && live.duration == nil && !live.canSeek)
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('.ytp-live-badge').style.visibility='hidden';true")
+        #expect(!(await MediaStateService().sample(page.webView)).isLive)
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('.ytp-live-badge').style.visibility='visible';document.querySelector('.html5-video-player').style.display='none';true")
+        #expect(!(await MediaStateService().sample(page.webView)).isLive)
+    }
+
     private func makePage() -> TabPage {
         let configuration = WKWebViewConfiguration()
         configuration.mediaTypesRequiringUserActionForPlayback = []
@@ -188,7 +240,7 @@ struct MediaSessionTests {
         Object.defineProperties(element, {
           paused: {get:()=>playback.paused}, ended: {get:()=>playback.ended},
           readyState: {get:()=>4}, currentSrc: {get:()=> 'https://example.com/track.wav'},
-          duration: {get:()=>playback.duration}, seekable: {get:()=>({length:1,start:()=>0,end:()=>5})},
+          duration: {get:()=>playback.duration}, seekable: {configurable:true,get:()=>({length:1,start:()=>0,end:()=>5})},
           currentTime: {get:()=>playback.time,set:value=>{
             playback.time=value; element.dispatchEvent(new Event('seeked'));
             if(value>=5){playback.ended=true;playback.paused=true;element.dispatchEvent(new Event('ended'))}

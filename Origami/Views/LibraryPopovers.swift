@@ -141,13 +141,13 @@ private struct DownloadPopoverRow: View {
         let bytes = ByteCountFormatter.string(fromByteCount: item.received, countStyle: .file)
         switch item.state {
         case .running:
-            if let expected = item.expected, expected > 0 { return "\(bytes) of \(ByteCountFormatter.string(fromByteCount: expected, countStyle: .file))" }
-            return "\(bytes) downloaded"
-        case .choosingDestination: return "Choose where to save"
-        case .completed: return item.received > 0 ? "\(bytes) · Completed" : "Completed"
-        case .cancelled: return "Cancelled"
-        case .failed: return "Download failed"
-        case .interrupted: return "Download interrupted"
+            if let expected = item.expected, expected > 0 { return L10n.format("%@ of %@", bytes, ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)) }
+            return L10n.format("%@ downloaded", bytes)
+        case .choosingDestination: return L10n.string("Choose where to save")
+        case .completed: return item.received > 0 ? L10n.format("%@ · Completed", bytes) : L10n.string("Completed")
+        case .cancelled: return L10n.string("Cancelled")
+        case .failed: return L10n.string("Download failed")
+        case .interrupted: return L10n.string("Download interrupted")
         }
     }
     var body: some View {
@@ -179,7 +179,7 @@ private struct DownloadPopoverRow: View {
     }
     private func iconButton(_ symbol: String, title: String, action name: String) -> some View {
         Button { action(name) } label: { Image(systemName: symbol).font(.system(size: 12)).frame(width: 24, height: 24) }
-            .buttonStyle(.plain).foregroundStyle(.secondary).help(title).accessibilityLabel(title)
+            .buttonStyle(.plain).foregroundStyle(.secondary).help(L10n.string(title)).accessibilityLabel(L10n.string(title))
     }
 }
 
@@ -190,8 +190,8 @@ private struct LibraryEmptyState: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol).font(.system(size: 25, weight: .light)).foregroundStyle(.tertiary)
-            Text(title).font(.system(size: 12, weight: .medium))
-            Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(L10n.string(title)).font(.system(size: 12, weight: .medium))
+            Text(L10n.string(detail)).font(.system(size: 11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }.frame(maxWidth: .infinity).padding(.vertical, 25)
     }
 }
@@ -203,7 +203,7 @@ private struct LibraryFooter: View {
         VStack(spacing: 10) {
             Divider()
             Button(action: action) {
-                HStack { Text(title); Spacer(); Image(systemName: "arrow.up.right").font(.system(size: 10)) }
+                HStack { Text(L10n.string(title)); Spacer(); Image(systemName: "arrow.up.right").font(.system(size: 10)) }
                     .font(.system(size: 12)).foregroundStyle(.secondary).contentShape(Rectangle())
             }.buttonStyle(.plain)
         }

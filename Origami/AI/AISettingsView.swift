@@ -56,7 +56,7 @@ struct AISettingsView: View {
                         Spacer()
                     }
                     if settings.provider == .openRouter {
-                        Text("Free model pricing covers tokens. Web search is billed separately.").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.string("Free model pricing covers tokens. Web search is billed separately.")).font(.caption).foregroundStyle(.secondary)
                         HStack {
                             Text("Web search"); Spacer()
                             Menu {
@@ -74,10 +74,10 @@ struct AISettingsView: View {
                     HStack { Text("Fallback model"); Spacer(); ModelSearchControl(selection: Binding(get: { settings.model("fallback") }, set: { settings.setModel($0, role: "fallback") }), placeholder: "Choose fallback model…", allowsDefault: true, clearLabel: "No fallback", settingsStyle: true)
                         .frame(width: 220, alignment: .leading) }
                     Toggle("Automatically use fallback when the default model is unavailable", isOn: $settings.automaticFallback)
-                    Text("Fallback uses only your configured model when its required capabilities are confirmed. Model and search charges may apply.").font(.caption).foregroundStyle(.secondary)
+                    Text(L10n.string("Fallback uses only your configured model when its required capabilities are confirmed. Model and search charges may apply.")).font(.caption).foregroundStyle(.secondary)
                     modelRow("Lightweight model", "lightweight")
                     modelRow("Research model", "research")
-                    Text("Choose a default model with web search support. Other models are optional.")
+                    Text(L10n.string("Choose a default model with web search support. Other models are optional."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
@@ -87,14 +87,14 @@ struct AISettingsView: View {
                     Toggle("Enable AI Peek (experimental)", isOn: $settings.aiPeekEnabled)
                     Toggle("Automatically summarize previews", isOn: $settings.aiPeekSummary).disabled(!settings.aiPeekEnabled)
                     Toggle("Automatically evaluate preview credibility", isOn: $settings.aiPeekCredibility).disabled(!settings.aiPeekEnabled)
-                    Text("When enabled, every Peek sends page excerpts to your configured lightweight model. Credibility also uses web search. Provider charges may apply, including in private windows. These preferences apply to future previews until switched off.")
+                    Text(L10n.string("When enabled, every Peek sends page excerpts to your configured lightweight model. Credibility also uses web search. Provider charges may apply, including in private windows. These preferences apply to future previews until switched off."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
                 }
-                Text("Keys are stored in Keychain. Requests go to your provider and may incur charges.")
+                Text(L10n.string("Keys are stored in Keychain. Requests go to your provider and may incur charges."))
                     .font(.caption).foregroundStyle(.secondary)
-                Text("Private requests aren’t saved locally. Your provider’s retention policy still applies.")
+                Text(L10n.string("Private requests aren’t saved locally. Your provider’s retention policy still applies."))
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(24).frame(maxWidth: 680, alignment: .leading)
         }
@@ -104,7 +104,7 @@ struct AISettingsView: View {
             Button("Cancel", role: .cancel) { }
             Button("Update Key") { saveCredential() }
         } message: {
-            Text("This replaces the saved key in Keychain and verifies the new key.")
+            Text(L10n.string("This replaces the saved key in Keychain and verifies the new key."))
         }
         .alert("Disconnect \(settings.provider.rawValue)?", isPresented: $confirmingDisconnect) {
             Button("Cancel", role: .cancel) { }
@@ -116,7 +116,7 @@ struct AISettingsView: View {
                 } catch { status = error.localizedDescription }
             }
         } message: {
-            Text("This removes the API key from Keychain and stops active AI requests. To use this service again, reconnect it.")
+            Text(L10n.string("This removes the API key from Keychain and stops active AI requests. To use this service again, reconnect it."))
         }
         .onAppear { saved = AICredentialStore().contains(settings.provider); models = settings.availableModels }
         .onChange(of: settings.provider) { confirmingUpdate = false; confirmingDisconnect = false; showingKey = false; credential = ""; models = settings.availableModels; status = ""; saved = AICredentialStore().contains(settings.provider) }
@@ -130,7 +130,7 @@ struct AISettingsView: View {
     }
     private func modelRow(_ title: String, _ role: String) -> some View {
         HStack {
-            Text(title); Spacer()
+            Text(L10n.string(title)); Spacer()
             ModelSearchControl(selection: Binding(get: { settings.model(role) }, set: { settings.setModel($0, role: role) }), placeholder: role == "primary" ? "Search models…" : "Use default", allowsDefault: role != "primary", settingsStyle: true)
                 .frame(width: 220, alignment: .leading)
         }
@@ -155,8 +155,8 @@ struct AISettingsView: View {
                 let rows = (root["data"] ?? root["models"]) as? [[String: Any]] ?? []
                 settings.storeCatalog(rows)
                 models = rows.compactMap { ($0["id"] as? String ?? $0["name"] as? String)?.replacingOccurrences(of: "models/", with: "") }.sorted()
-                settings.setCatalog(models); settings.setVerified(true); status = settings.model("primary").isEmpty ? "Connected. Choose a default model below to complete setup." : "Connection verified."
-            } catch { guard settings.provider == provider else { return }; settings.setVerified(false); status = (error as? AIError)?.localizedDescription ?? "Could not check the provider connection." }
+                settings.setCatalog(models); settings.setVerified(true); status = settings.model("primary").isEmpty ? L10n.string("Connected. Choose a default model below to complete setup.") : "Connection verified."
+            } catch { guard settings.provider == provider else { return }; settings.setVerified(false); status = (error as? AIError)?.localizedDescription ?? L10n.string("Could not check the provider connection.") }
         }
     }
 }

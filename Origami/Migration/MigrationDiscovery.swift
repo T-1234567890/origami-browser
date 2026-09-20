@@ -103,7 +103,7 @@ enum MigrationDiscovery {
         reset(); source = value
         // Do not quit another app or read a live, changing database without the user acting.
         if !NSRunningApplication.runningApplications(withBundleIdentifier: value.browser.bundleID).isEmpty {
-            error = "Quit \(value.browser.rawValue) to bring over your latest data, then try again."
+            error = L10n.format("Quit %@ to bring over your latest data, then try again.", value.browser.rawValue)
             return
         }
         read(value.roots, browser: value.browser)
@@ -113,13 +113,13 @@ enum MigrationDiscovery {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.directoryURL = root
-        panel.prompt = "Allow Access"
-        panel.message = "Allow Origami to read \(source.browser.rawValue)’s browsing data. The browser’s folder is already selected."
+        panel.prompt = L10n.string("Allow Access")
+        panel.message = L10n.format("Allow Origami to read %@’s browsing data. The browser’s folder is already selected.", source.browser.rawValue)
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url, let self, self.source?.id == source.id else { return }
             // This is an access grant for the detected browser, not an arbitrary-file importer.
             guard source.roots.contains(where: { $0.standardizedFileURL == url.standardizedFileURL }) else {
-                self.error = "Access was not granted to the browser’s data. Try Allow Access again."; return
+                self.error = L10n.string("Access was not granted to the browser’s data. Try Allow Access again."); return
             }
             self.read([url], browser: source.browser, scoped: true)
         }
@@ -143,8 +143,8 @@ enum MigrationDiscovery {
                 guard requestID == id else { return }
                 needsAccess = MigrationAccess.denied(error)
                 accessRoot = (error as? MigrationAccessRequired)?.root
-                self.error = needsAccess ? "Allow Origami to read \(browser.rawValue)’s data to continue." :
-                    "No compatible browsing data was found for \(browser.rawValue). You can try again or choose another browser."
+                self.error = needsAccess ? L10n.format("Allow Origami to read %@’s data to continue.", browser.rawValue) :
+                    L10n.format("No compatible browsing data was found for %@. You can try again or choose another browser.", browser.rawValue)
             }
             if requestID == id { busy = false }
         }

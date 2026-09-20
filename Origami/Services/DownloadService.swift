@@ -74,7 +74,7 @@ final class DownloadService: NSObject, WKDownloadDelegate {
                 transfer.record.destination = url.path; transfer.record.state = .running
                 transfer.observation = observeProgress(download)
                 transfers[ObjectIdentifier(download)] = transfer; persist(transfer.record); completionHandler(url); return
-            } catch { onError?("Choose a download folder again to allow access.") }
+            } catch { onError?(L10n.string("Choose a download folder again to allow access.")) }
         }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = transfer.record.filename
@@ -85,7 +85,7 @@ final class DownloadService: NSObject, WKDownloadDelegate {
                 completionHandler(nil); self.finish(download, state: .cancelled); return
             }
             guard !FileManager.default.fileExists(atPath: url.path) else {
-                completionHandler(nil); self.finish(download, state: .failed, error: "Choose a filename that does not already exist."); return
+                completionHandler(nil); self.finish(download, state: .failed, error: L10n.string("Choose a filename that does not already exist.")); return
             }
             if url.startAccessingSecurityScopedResource() { transfer.accessURL = url }
             transfer.record.destination = url.path
@@ -116,7 +116,7 @@ final class DownloadService: NSObject, WKDownloadDelegate {
     }
     func downloadDidFinish(_ download: WKDownload) { finish(download, state: .completed) }
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        finish(download, state: .failed, error: "The download failed. Try again.")
+        finish(download, state: .failed, error: L10n.string("The download failed. Try again."))
     }
     private func finish(_ download: WKDownload, state: DownloadState, error: String? = nil) {
         guard var transfer = transfers.removeValue(forKey: ObjectIdentifier(download)) else { return }

@@ -60,8 +60,13 @@ import WebKit
         service.setAllowed(false, host: "site.invalid", kind: .content)
         await service.prepare()
         #expect(service.contentExcludedSites == ["other.invalid"])
+        service.setAllowed(true, host: "popover.invalid", kind: .content)
+        await service.prepare()
+        #expect(service.contentExcludedSites == ["other.invalid", "popover.invalid"])
+        #expect(!service.allowsSite("popover.invalid", kind: .ads))
         try service.saveContentExcludedSites("")
         await service.prepare()
+        #expect(!service.allowsSite("popover.invalid", kind: .content))
         #expect(preferences.blockingExceptions(.content).isEmpty)
         #expect(!preferences.contentBlocking)
     }
@@ -94,7 +99,12 @@ import WebKit
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let compiler = try #require(WKContentRuleListStore(url: folder))
-        let conversion = try FilterConverter.convert([Self.fixture, "[Adblock Plus 2.0]\n||track.example.invalid^$domain=site.invalid\n"])
+        // Every supported filter resource type must compile in real WebKit, not
+        // merely round-trip through JSON. EasyList's stylesheet spelling differs.
+        let typedRules = ["script", "image", "stylesheet", "font", "media", "xmlhttprequest"]
+            .map { "||typed.example.invalid^$" + $0 }.joined(separator: "\n")
+        let conversion = try FilterConverter.convert([Self.fixture + typedRules, "[Adblock Plus 2.0]\n||track.example.invalid^$domain=site.invalid\n"])
+        #expect(conversion.rules.contains { $0.trigger.resourceType == ["style-sheet"] })
         for (i, rules) in [UserContentRules.rules(domains: ["example.invalid"]), conversion.rules + [.exception(host: "site.invalid")]].enumerated() {
             let json = String(decoding: try JSONEncoder().encode(rules), as: UTF8.self)
             #expect(try await compiler.compileContentRuleList(forIdentifier: "test-\(i)", encodedContentRuleList: json) != nil)

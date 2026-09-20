@@ -85,6 +85,7 @@ struct SuggestionList: View {
             hide()
             panel.contentView = NSHostingView(rootView:
                 SuggestionList(engine: engine, store: store, activate: activate)
+                    .modifier(LiveLanguage())
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                     .clipShape(RoundedRectangle(cornerRadius: 10)))
             window.addChildWindow(panel, ordered: .above)

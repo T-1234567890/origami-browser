@@ -120,21 +120,21 @@ enum AIError: LocalizedError {
     var requiresSetup: Bool { switch self { case .credential, .model, .http(401), .http(403), .nonRetryable(401), .nonRetryable(403): true; default: false } }
     var errorDescription: String? {
         switch self {
-        case .featureDisabled: "AI Peek and credibility assessment are temporarily disabled."
-        case .unavailable: "The selected model is temporarily unavailable. Try again later."
+        case .featureDisabled: L10n.string("AI Peek and credibility assessment are temporarily disabled.")
+        case .unavailable: L10n.string("The selected model is temporarily unavailable. Try again later.")
         case .nonRetryable(let status): "Provider request failed (HTTP \(status)). Check your provider settings and request requirements."
-        case .noCompatibleFallback: "The selected model is temporarily unavailable. No compatible fallback model is configured."
-        case .credential: "Connect a provider in Settings → AI."
-        case .model: "Choose a compatible model in Settings → AI."
-        case .truncated: "The provider stopped before completing the answer. Retry with a smaller visual or a different model."
-        case .invalidJSON: "The model returned incomplete or invalid JSON. Retry, or choose a model with structured-output support."
-        case .answerSchema: "The model’s answer did not match the required answer format. Retry, or choose a model with structured-output support."
-        case .response: "The provider did not return a usable answer. Try another model or request."
+        case .noCompatibleFallback: L10n.string("The selected model is temporarily unavailable. No compatible fallback model is configured.")
+        case .credential: L10n.string("Connect a provider in Settings → AI.")
+        case .model: L10n.string("Choose a compatible model in Settings → AI.")
+        case .truncated: L10n.string("The provider stopped before completing the answer. Retry with a smaller visual or a different model.")
+        case .invalidJSON: L10n.string("The model returned incomplete or invalid JSON. Retry, or choose a model with structured-output support.")
+        case .answerSchema: L10n.string("The model’s answer did not match the required answer format. Retry, or choose a model with structured-output support.")
+        case .response: L10n.string("The provider did not return a usable answer. Try another model or request.")
         case .http(let status): "Provider request failed (HTTP \(status)). Check your credential, model access, quota and web-search support."
-        case .tooLarge: "The provider response exceeded the size limit. Try a shorter request."
-        case .noSelection: "Select text on the webpage first."
-        case .noPage: "Choose a loaded webpage. Internal pages are not sent to AI."
-        case .cancelled: "Cancelled."
+        case .tooLarge: L10n.string("The provider response exceeded the size limit. Try a shorter request.")
+        case .noSelection: L10n.string("Select text on the webpage first.")
+        case .noPage: L10n.string("Choose a loaded webpage. Internal pages are not sent to AI.")
+        case .cancelled: L10n.string("Cancelled.")
         }
     }
 }

@@ -1,8 +1,46 @@
 import AppKit
+import WebKit
 import Testing
 @testable import Origami
 
 @MainActor struct ViewUpdateBoundaryTests {
+    @Test func delayedTabUpdateDoesNotBlurWebKitOrAnotherField() async throws {
+        let store = BrowserStore()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let field = AddressField(frame: NSRect(x: 0, y: 560, width: 400, height: 30))
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 540), configuration: configuration)
+        window.contentView?.addSubview(field)
+        window.contentView?.addSubview(web)
+        var view = Omnibox(store: store, allowRemote: false, tabID: UUID(), value: "https://example.invalid", focusRequest: UUID(), canFocus: false) { _, _ in }
+        let coordinator = view.makeCoordinator()
+        defer { coordinator.active = false }
+        coordinator.field = field
+        coordinator.lastTabID = view.tabID
+        // The user has already clicked into WebKit, but SwiftUI's queued address
+        // update still has the previous editing state (e.g. Split View selection).
+        coordinator.editing = true
+        #expect(window.makeFirstResponder(web))
+        view.tabID = UUID()
+        coordinator.parent = view
+        coordinator.scheduleUpdate(field)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(window.firstResponder === web)
+        #expect(!coordinator.editing)
+
+        // A genuine address edit still ends when changing tabs.
+        #expect(window.makeFirstResponder(field))
+        coordinator.editing = true
+        coordinator.parent.tabID = UUID()
+        coordinator.scheduleUpdate(field)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(window.firstResponder !== field)
+        #expect(field.currentEditor() == nil)
+    }
     @Test func newTabSearchTypingUsesLocalAutocompleteAndActivatesWebsite() async throws {
         let store = BrowserStore()
         var query = ""

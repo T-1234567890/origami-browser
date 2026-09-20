@@ -13,7 +13,7 @@ import WebKit
     func restore(tab: UUID, profile: UUID) {
         guard !isPrivate, events[tab] == nil else { return }
         if var event = try? repository.event(tab: tab, profile: profile) {
-            if event.status != "Complete" { event.status = "Interrupted — submit again to retry." }
+            if event.status != "Complete" { event.status = L10n.string("Interrupted — submit again to retry.") }
             events[tab] = event
         }
     }
@@ -45,7 +45,7 @@ import WebKit
             } catch {
                 guard events[tab]?.id == eventID else { return }
                 event.answerV1 = nil
-                event.status = Task.isCancelled ? "Cancelled" : (error as? AIError)?.localizedDescription ?? "The request could not finish. Check your connection and provider settings."
+                event.status = Task.isCancelled ? "Cancelled" : (error as? AIError)?.localizedDescription ?? L10n.string("The request could not finish. Check your connection and provider settings.")
                 event.needsSetup = (error as? AIError)?.requiresSetup
                 if event.needsSetup == true && AISettings.shared.provider == provider { AISettings.shared.setVerified(false) }
                 events[tab] = event
@@ -77,7 +77,7 @@ import WebKit
                 try AnswerProtocol.apply(result, to: &answer, input: input)
             } catch {
                 answer.answerV1 = nil
-                answer.status = Task.isCancelled ? "Cancelled" : (error as? AIError)?.localizedDescription ?? "The follow-up could not finish."
+                answer.status = Task.isCancelled ? "Cancelled" : (error as? AIError)?.localizedDescription ?? L10n.string("The follow-up could not finish.")
                 answer.needsSetup = (error as? AIError)?.requiresSetup
                 if answer.needsSetup == true && AISettings.shared.provider == provider { AISettings.shared.setVerified(false) }
             }

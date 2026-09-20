@@ -29,7 +29,7 @@ struct TabRow: View {
                     if tab.isPinned { SiteIcon(store: store, url: tab.url, size: vertical ? 20 : 16) }
                     else { TabIcon(store: store, tab: tab) }
                     if !tab.isPinned {
-                        Text(tab.title).font(.system(size: 11, weight: active ? .medium : .regular)).contentTransition(.opacity).animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: tab.title)
+                        Text(tab.displayTitle).font(.system(size: 11, weight: active ? .medium : .regular)).contentTransition(.opacity).animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: tab.title)
                             .lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 0)
                     }
@@ -75,7 +75,7 @@ struct TabRow: View {
         .contextMenu {
             Menu("Split with Tab") {
                 ForEach(store.session.tabs.filter { $0.id != tab.id }) { other in
-                    Button(other.title) { store.select(tab.id); store.splitWith(other.id) }
+                    Button(other.displayTitle) { store.select(tab.id); store.splitWith(other.id) }
                 }
             }.disabled(store.session.tabs.count < 2)
             if store.session.split != nil {

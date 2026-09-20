@@ -39,7 +39,7 @@ struct NativeDownloads: View {
         }
     }
     private func action(_ title: String, _ action: String, _ row: [String: Any]) -> some View {
-        Button(title) { Task { await model.call("downloads.action", ["id": row.text("id"), "action": action]); await refresh() } }
+        Button(L10n.string(title)) { Task { await model.call("downloads.action", ["id": row.text("id"), "action": action]); await refresh() } }
     }
     private func refresh() async {
         var result: [[String: Any]] = []

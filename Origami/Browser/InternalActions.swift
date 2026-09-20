@@ -63,7 +63,7 @@ extension BrowserStore {
             guard let id = params["id"] as? NSNumber else { throw RepositoryError.invalidInput }
             try services.history.deleteVisit(id.int64Value, profileID: profileID); return true
         case "history.clear":
-            guard await confirm("Delete history in this date range? Shared history is removed for every profile using it.", tabID: tabID) else { return false }
+            guard await confirm(L10n.string("Delete history in this date range? Shared history is removed for every profile using it."), tabID: tabID) else { return false }
             try services.history.clear(profileID: profileID, since: Date(timeIntervalSince1970: params["since"] as? Double ?? 0), until: Date(timeIntervalSince1970: params["until"] as? Double ?? Date.distantFuture.timeIntervalSince1970)); return true
         case "recent.list":
             return recentlyClosed.filter { $0.tab.canReopen }.reversed().prefix(20).map { ["id": $0.tab.id.uuidString, "title": $0.tab.title, "url": $0.tab.url?.absoluteString ?? ""] }
@@ -104,7 +104,7 @@ extension BrowserStore {
             try services.bookmarks.moveFolder(id, parentID: folder(), position: params["position"] as? Int ?? 0, profileID: profileID)
             try services.bookmarks.renameFolder(id, title: string("title"), profileID: profileID); bookmarksChanged(); return true
         case "folders.delete":
-            guard await confirm("Delete this folder and its bookmarks?", tabID: tabID) else { return false }
+            guard await confirm(L10n.string("Delete this folder and its bookmarks?"), tabID: tabID) else { return false }
             try services.bookmarks.deleteFolder(try uuid("id"), profileID: profileID); bookmarksChanged(); return true
         case "folders.open":
             try openFolder(try uuid("id"), grouped: params["grouped"] as? Bool ?? false); return true

@@ -54,6 +54,8 @@ final class WebContentHost: NSView {
     required init?(coder: NSCoder) { super.init(coder: coder) }
 
     func attach(_ webView: WKWebView) {
+        // WebKit owns reparenting (and its placeholder) during element fullscreen.
+        guard webView.fullscreenState == .notInFullscreen else { return }
         if subviews.first !== webView {
             subviews.forEach { $0.removeFromSuperview() }
             webView.removeFromSuperview()
@@ -80,7 +82,8 @@ final class WebContentHost: NSView {
     }
 
     private func synchronizeViewport() {
-        guard let webView = subviews.first as? WKWebView, webView.frame != bounds else { return }
+        guard let webView = subviews.first as? WKWebView,
+              webView.fullscreenState == .notInFullscreen, webView.frame != bounds else { return }
         webView.frame = bounds
     }
 }

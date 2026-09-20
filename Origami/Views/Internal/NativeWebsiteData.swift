@@ -22,7 +22,7 @@ struct NativeWebsiteData: View {
                     .font(.callout).foregroundStyle(.secondary).lineLimit(3)
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(options, id: \.0) { key, title in
-                        Toggle(title, isOn: Binding(get: { categories.contains(key) }, set: { selected in
+                        Toggle(L10n.string(title), isOn: Binding(get: { categories.contains(key) }, set: { selected in
                             if selected {
                                 if key == "all" { categories.subtract(["cookies", "cache"]) }
                                 if key == "cookies" || key == "cache" { categories.remove("all") }

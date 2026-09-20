@@ -89,7 +89,7 @@ struct AppearanceSettings: View {
     var body: some View {
         @Bindable var settings = appearance
         Section("Appearance") {
-            Picker("Appearance", selection: $settings.mode) { ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) } }
+            Picker("Appearance", selection: $settings.mode) { ForEach(["System", "Light", "Dark"], id: \.self) { Text(L10n.string($0)) } }
             LabeledContent("Main accent") {
                 HStack {
                     Button { settings.hex = "55D4B3"; settings.gradientEnabled = false } label: {
@@ -109,12 +109,12 @@ struct AppearanceSettings: View {
             if settings.gradientEnabled {
                 ColorPicker("Second color", selection: Binding(get: { settings.secondaryAccent }, set: { settings.setSecondaryAccent($0) }), supportsOpacity: false)
                 settings.accentFill.frame(height: 12).clipShape(Capsule()).accessibilityLabel("Accent gradient preview")
-                Text("The main accent is used for buttons and selection. The gradient is used for background fills.").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.string("The main accent is used for buttons and selection. The gradient is used for background fills.")).font(.caption).foregroundStyle(.secondary)
             }
             Toggle("Fill frame and sidebar background with accent (Vertical tabs only)", isOn: $settings.frameFill)
                 .disabled(layout == .horizontal)
-            Picker("Tab density", selection: $settings.density) { ForEach(["Compact", "Standard", "Comfortable"], id: \.self) { Text($0) } }
-            Picker("Glass", selection: $settings.glass) { ForEach(["Reduced", "Standard"], id: \.self) { Text($0) } }
+            Picker("Tab density", selection: $settings.density) { ForEach(["Compact", "Standard", "Comfortable"], id: \.self) { Text(L10n.string($0)) } }
+            Picker("Glass", selection: $settings.glass) { ForEach(["Reduced", "Standard"], id: \.self) { Text(L10n.string($0)) } }
         }
         Section("New Tab") {
             Toggle("Show pinned and favorite sites", isOn: $settings.favorites)
@@ -143,9 +143,9 @@ struct AppearanceSettings: View {
             guard result == .OK, let url = panel.url else { return }
             let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
             do {
-                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 4_000_000 else { error = "Choose an image smaller than 4 MB."; return }
+                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 4_000_000 else { error = L10n.string("Choose an image smaller than 4 MB."); return }
                 let data = try Data(contentsOf: url)
-                guard let image = NSImage(data: data), image.size.width > 0, image.size.height > 0 else { error = "This PNG or SVG could not be opened."; return }
+                guard let image = NSImage(data: data), image.size.width > 0, image.size.height > 0 else { error = L10n.string("This PNG or SVG could not be opened."); return }
                 settings.titleImage = data; error = nil
             } catch { self.error = "This image could not be read." }
         }
@@ -155,7 +155,7 @@ struct AppearanceSettings: View {
         panel.begin { result in
             guard result == .OK, let url = panel.url else { return }
             let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
-            guard let image = NSImage(contentsOf: url), image.size.width > 0, image.size.height > 0 else { error = "This image could not be opened."; return }
+            guard let image = NSImage(contentsOf: url), image.size.width > 0, image.size.height > 0 else { error = L10n.string("This image could not be opened."); return }
             // Store a bounded thumbnail, never an arbitrary original image in preferences.
             let scale = min(1, 1600 / max(image.size.width, image.size.height))
             let resized = NSImage(size: NSSize(width: image.size.width*scale, height: image.size.height*scale))

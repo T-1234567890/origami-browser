@@ -70,7 +70,8 @@ enum FilterConverter {
                 switch option {
                 case "third-party", "3p": trigger.loadType = ["third-party"]
                 case "~third-party", "~3p": trigger.loadType = ["first-party"]
-                case "script", "image", "stylesheet", "font", "media": types.append(String(option))
+                case "script", "image", "font", "media": types.append(String(option))
+                case "stylesheet": types.append("style-sheet")
                 case "xmlhttprequest": types.append("raw")
                 default:
                     if option.hasPrefix("domain=") {

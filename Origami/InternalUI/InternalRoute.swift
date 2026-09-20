@@ -23,12 +23,12 @@ enum InternalPage: String, CaseIterable {
     }
     var title: String {
         switch self {
-        case .feeds: return "Websites I Follow"
-        case .newtab: return "New Tab"
-        case .data: return "Website Data"
-        case .credits: return "Credits & Licenses"
-        case .migration: return "Import Browser Data"
-        default: return rawValue.capitalized
+        case .feeds: return L10n.string("Websites I Follow")
+        case .newtab: return L10n.string("New Tab")
+        case .data: return L10n.string("Website Data")
+        case .credits: return L10n.string("Credits & Licenses")
+        case .migration: return L10n.string("Import Browser Data")
+        default: return L10n.string(rawValue.capitalized)
         }
     }
 }

@@ -41,8 +41,8 @@ struct AskSurface: View {
                             }
                         }
                     }
-                    if let state = event.credibility { Label(state.rawValue, systemImage: state == .highlyCredible || state == .credible ? "checkmark.circle" : state == .unknown ? "questionmark.circle" : "exclamationmark.circle").font(.headline); Text("AI-assisted source assessment, not a verdict on every claim.").font(.caption).foregroundStyle(.secondary) }
-                    if let state = event.verification { Text(state.rawValue).font(.headline); Text("AI-assisted assessment. Review the linked evidence before relying on it.").font(.caption).foregroundStyle(.secondary) }
+                    if let state = event.credibility { Label(L10n.string(state.rawValue), systemImage: state == .highlyCredible || state == .credible ? "checkmark.circle" : state == .unknown ? "questionmark.circle" : "exclamationmark.circle").font(.headline); Text("AI-assisted source assessment, not a verdict on every claim.").font(.caption).foregroundStyle(.secondary) }
+                    if let state = event.verification { Text(L10n.string(state.rawValue)).font(.headline); Text("AI-assisted assessment. Review the linked evidence before relying on it.").font(.caption).foregroundStyle(.secondary) }
                     if let answer = event.answerV1 {
                         StructuredAnswerView(answer: answer, store: store, visualsAllowed: event.generatedVisuals == true, referencePrefix: event.id.uuidString) { id in
                             Task { @MainActor in

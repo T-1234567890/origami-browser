@@ -49,7 +49,7 @@ struct ReaderView: View {
                             LabeledContent("Font size") { Slider(value: $size, in: 14...28) }
                             LabeledContent("Line width") { Slider(value: $width, in: 420...820) }
                             LabeledContent("Line spacing") { Slider(value: $spacing, in: 2...16) }
-                            Picker("Appearance", selection: $appearance) { ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) } }
+                            Picker("Appearance", selection: $appearance) { ForEach(["System", "Light", "Dark"], id: \.self) { Text(L10n.string($0)) } }
                         }.padding(16).frame(width: 290)
                     }
                 Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString("# \(article.title)\n\n\(article.exportMarkdown)", forType: .string); copied = true } label: { if copied { Label("Copied", systemImage: "checkmark") } else { Image(systemName: "doc.on.doc") } }.help("Copy as Markdown")

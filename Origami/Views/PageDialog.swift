@@ -16,7 +16,7 @@ final class PageDialog: NSObject, NSPopoverDelegate {
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: PageDialogContent(
             title: title, message: message, accept: accept, allowsCancel: allowsCancel,
-            hasInput: input != nil, text: input ?? "", resolve: { [weak self] in self?.resolve($0) }))
+            hasInput: input != nil, text: input ?? "", resolve: { [weak self] in self?.resolve($0) }).modifier(LiveLanguage()))
         let anchor = NSRect(x: view.bounds.midX, y: view.isFlipped ? view.bounds.minY : view.bounds.maxY,
                             width: 1, height: 1)
         popover.show(relativeTo: anchor, of: view, preferredEdge: view.isFlipped ? .maxY : .minY)
@@ -31,9 +31,9 @@ final class PageDialog: NSObject, NSPopoverDelegate {
             Text(title).font(.headline)
             PopoverMessage(message: message)
             ForEach(["Open Once", "Always Open", "Stay in Browser", "Block"], id: \.self) { choice in
-                Button(choice) { resolveChoice(choice) }
+                Button(L10n.string(choice)) { resolveChoice(choice) }
             }
-        }.padding(20).frame(width: 300))
+        }.padding(20).frame(width: 300).modifier(LiveLanguage()))
         popover.show(relativeTo: NSRect(x: view.bounds.midX, y: view.isFlipped ? view.bounds.minY : view.bounds.maxY, width: 1, height: 1), of: view, preferredEdge: view.isFlipped ? .maxY : .minY)
     }
     func cancel() { resolve(nil) }
@@ -75,7 +75,7 @@ private struct PageDialogContent: View {
                 if allowsCancel {
                     Button("Cancel") { resolve(nil) }.keyboardShortcut(.cancelAction)
                 }
-                Button(accept) { resolve(text) }.keyboardShortcut(.defaultAction)
+                Button(L10n.string(accept)) { resolve(text) }.keyboardShortcut(.defaultAction)
             }
         }.padding(16).frame(width: 300)
             .onAppear { inputFocused = hasInput }

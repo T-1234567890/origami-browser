@@ -33,12 +33,12 @@ struct BrowserHotKey: Equatable {
             }
             return noErr
         }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
-        guard installed == noErr else { error = "Global shortcuts could not be registered on this Mac."; return }
+        guard installed == noErr else { error = L10n.string("Global shortcuts could not be registered on this Mac."); return }
         configure()
     }
     func configure() {
         registrations.forEach { UnregisterEventHotKey($0) }; registrations.removeAll(); error = nil
-        guard handler != nil else { error = "Global shortcuts could not be registered on this Mac."; return }
+        guard handler != nil else { error = L10n.string("Global shortcuts could not be registered on this Mac."); return }
         guard let preferences = application?.persistence?.preferences ?? application?.activeStore?.preferences else { return }
         for (id, enabled, shortcut) in [(UInt32(1), preferences.globalSearchEnabled, preferences.searchHotKey), (UInt32(2), preferences.quickHideEnabled, preferences.hideHotKey)] where enabled {
             var ref: EventHotKeyRef?
@@ -59,7 +59,7 @@ struct BrowserHotKey: Equatable {
         panel.level = .floating; panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false; panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true; panel.becomesKeyOnlyIfNeeded = false
-        panel.contentView = NSHostingView(rootView: GlobalSearchField(submit: { [weak self] text in self?.submit(text) }, cancel: { [weak panel] in panel?.orderOut(nil) }))
+        panel.contentView = NSHostingView(rootView: GlobalSearchField(submit: { [weak self] text in self?.submit(text) }, cancel: { [weak panel] in panel?.orderOut(nil) }).modifier(LiveLanguage()))
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         if let frame = screen?.visibleFrame { panel.setFrameOrigin(NSPoint(x: frame.midX - 280, y: frame.minY + frame.height * 0.68)) }

@@ -5,6 +5,14 @@ struct BrowserTab: Identifiable, Codable, Equatable {
     var id = UUID()
     var url: URL?
     var title = "New Tab"
+    /// Translate browser-owned destinations at presentation time, not stored page titles.
+    var displayTitle: String {
+        guard let url, let page = InternalRoute.page(for: url) else {
+            return url == nil && title == "New Tab" ? L10n.string("New Tab") : title
+        }
+        if page == .newtab { return title == "New Tab" ? page.title : title }
+        return page.title
+    }
     var isPinned = false
     var groupID: UUID?
     var isSleeping: Bool?

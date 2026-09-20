@@ -6,11 +6,11 @@ enum ProfileDataKind: String, CaseIterable, Identifiable {
     var id: Self { self }
     var title: String {
         switch self {
-        case .website: "Website data and sign-ins"
-        case .history: "History"
-        case .bookmarks: "Bookmarks"
-        case .appearance: "Appearance"
-        case .layout: "Tab layout"
+        case .website: L10n.string("Website data and sign-ins")
+        case .history: L10n.string("History")
+        case .bookmarks: L10n.string("Bookmarks")
+        case .appearance: L10n.string("Appearance")
+        case .layout: L10n.string("Tab layout")
         }
     }
 }

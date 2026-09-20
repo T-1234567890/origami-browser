@@ -8,6 +8,10 @@ Search [existing issues](https://github.com/T-1234567890/origami-browser/issues)
 
 Keep pull requests focused and reasonably small. Explain behavioral or UI changes clearly, include tests where appropriate, and describe what you tested and any remaining limitations. Discuss substantial changes in an issue before investing in a large implementation.
 
+## Localization
+
+Follow the [localization guide](docs/localization.md) for String Catalog edits, terminology, AI-assisted review, live language switching, and validation. Coordinate new languages in [issue #1](https://github.com/T-1234567890/origami-browser/issues/1); currently only English and Simplified Chinese are enabled.
+
 ## Project conventions
 
 - Follow the existing Swift style and nearby project conventions.

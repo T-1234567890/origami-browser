@@ -5,10 +5,10 @@ enum SearchEngine: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .google: "Google"
-        case .bing: "Bing"
-        case .duckDuckGo: "DuckDuckGo"
-        case .brave: "Brave Search"
+        case .google: L10n.string("Google")
+        case .bing: L10n.string("Bing")
+        case .duckDuckGo: L10n.string("DuckDuckGo")
+        case .brave: L10n.string("Brave Search")
         }
     }
     var searchURLTemplate: String {

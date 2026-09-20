@@ -211,7 +211,7 @@ final class BrowserStore {
     func togglePin(_ id: UUID) {
         guard let index = session.tabs.firstIndex(where: { $0.id == id }) else { return }
         guard session.tabs[index].isPinned || profilePinCount < BrowserSession.maximumPinnedTabs else {
-            persistenceError = "You can pin up to six tabs. Unpin one to make room."
+            persistenceError = L10n.string("You can pin up to six tabs. Unpin one to make room.")
             return
         }
         session.tabs[index].isPinned.toggle()

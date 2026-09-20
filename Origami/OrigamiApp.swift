@@ -12,6 +12,7 @@ struct OrigamiApp: App {
     var body: some Scene {
         WindowGroup("Origami", id: "browser", for: UUID.self) { id in
             BrowserWindowRoot(application: application, identity: id)
+                .modifier(LiveLanguage())
                 .onAppear { delegate.application = application }
         } defaultValue: {
             application.initialID
@@ -86,66 +87,76 @@ private struct BrowserCommands: Commands {
     }
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
-            Button("Settings…") { browser().openInternal(.settings) }.keyboardShortcut(",")
+            Button(L10n.string("Settings…")) { browser().openInternal(.settings) }.keyboardShortcut(",")
         }
         CommandGroup(replacing: .newItem) {
-            Button("New Tab") { if let store { store.newTab() } else { _ = browser() } }.keyboardShortcut("t")
-            Button("New Private Window") { if let new = application.newPrivateWindow(), application.openWindow == nil { openWindow(id: "browser", value: new.session.windowID) } }.keyboardShortcut("n", modifiers: [.command, .shift])
-            Button("New Window") { let new = application.newWindow(); if application.openWindow == nil { openWindow(id: "browser", value: new.session.windowID) } }.keyboardShortcut("n")
-            Button("Reopen Closed Tab") { browser().reopenClosedTab() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(store?.recentlyClosed.isEmpty != false)
-            Button("Reopen Closed Window") { application.reopenWindow() }
+            Button(L10n.string("New Tab")) { if let store { store.newTab() } else { _ = browser() } }.keyboardShortcut("t")
+            Button(L10n.string("New Private Window")) { if let new = application.newPrivateWindow(), application.openWindow == nil { openWindow(id: "browser", value: new.session.windowID) } }.keyboardShortcut("n", modifiers: [.command, .shift])
+            Button(L10n.string("New Window")) { let new = application.newWindow(); if application.openWindow == nil { openWindow(id: "browser", value: new.session.windowID) } }.keyboardShortcut("n")
+            Button(L10n.string("Reopen Closed Tab")) { browser().reopenClosedTab() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(store?.recentlyClosed.isEmpty != false)
+            Button(L10n.string("Reopen Closed Window")) { application.reopenWindow() }
         }
         CommandGroup(replacing: .saveItem) {
-            Button("Close Tab") { if let id = store?.session.selectedTabID { store?.close(id) } }.keyboardShortcut("w").disabled(store?.selectedTab == nil)
-            Button("Close Window") { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut("w", modifiers: [.command, .shift])
+            Button(L10n.string("Close Tab")) { if let id = store?.session.selectedTabID { store?.close(id) } }.keyboardShortcut("w").disabled(store?.selectedTab == nil)
+            Button(L10n.string("Close Window")) { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut("w", modifiers: [.command, .shift])
         }
-        if BrowserFeatureFlags.compactSidebar {
-            CommandMenu("View") {
-                Button("Toggle Compact Sidebar") { store?.toggleSidebar() }
+        CommandMenu(L10n.string("View")) {
+            Button(L10n.string("Zoom In")) { store?.visiblePage?.zoom(increasing: true) }
+                .keyboardShortcut("+")
+                .disabled(store?.visiblePage?.canZoom != true || (store?.visiblePage?.zoomLevel ?? 1) >= 5)
+            Button(L10n.string("Zoom Out")) { store?.visiblePage?.zoom(increasing: false) }
+                .keyboardShortcut("-")
+                .disabled(store?.visiblePage?.canZoom != true || (store?.visiblePage?.zoomLevel ?? 1) <= 0.25)
+            Button(L10n.string("Actual Size")) { store?.visiblePage?.resetZoom() }
+                .keyboardShortcut("0")
+                .disabled(store?.visiblePage?.canZoom != true)
+            if BrowserFeatureFlags.compactSidebar {
+                Divider()
+                Button(L10n.string("Toggle Compact Sidebar")) { store?.toggleSidebar() }
                     .keyboardShortcut("s", modifiers: [.command, .control])
                     .disabled(store?.session.layout != .vertical)
             }
         }
-        CommandMenu("Navigate") {
-            Button("Open Location…") { browser().focusOmnibox() }.keyboardShortcut("l")
-            Button("Reload") { store?.selectedPage?.reload() }.keyboardShortcut("r")
+        CommandMenu(L10n.string("Navigate")) {
+            Button(L10n.string("Open Location…")) { browser().focusOmnibox() }.keyboardShortcut("l")
+            Button(L10n.string("Reload")) { store?.selectedPage?.reload() }.keyboardShortcut("r")
                 .disabled(store?.selectedTab == nil)
-            Button("Reload Without Cache") { store?.visiblePage?.reload(withoutCache: true) }
+            Button(L10n.string("Reload Without Cache")) { store?.visiblePage?.reload(withoutCache: true) }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(store?.visiblePage?.nativePage != nil || store?.visiblePage == nil)
-            Button("Stop Loading") { store?.selectedPage?.webView.stopLoading() }.keyboardShortcut(".")
-            Button("Back") { store?.selectedPage?.goBack() }.keyboardShortcut(.leftArrow, modifiers: [.command, .option]).disabled(store?.visiblePage?.canGoBack != true)
-            Button("Forward") { store?.selectedPage?.goForward() }.keyboardShortcut(.rightArrow, modifiers: [.command, .option]).disabled(store?.visiblePage?.canGoForward != true)
-            Button("Next Tab") { store?.cycleTab(1) }.keyboardShortcut(.tab, modifiers: .control)
-            Button("Previous Tab") { store?.cycleTab(-1) }.keyboardShortcut(.tab, modifiers: [.control, .shift])
-            Button("Paste and Go") { if let text = NSPasteboard.general.string(forType: .string) { browser().navigate(text) } }
-            Button("Paste and Search") { if let text = NSPasteboard.general.string(forType: .string) { browser().navigate(text, searchOnly: true) } }
+            Button(L10n.string("Stop Loading")) { store?.selectedPage?.webView.stopLoading() }.keyboardShortcut(".")
+            Button(L10n.string("Back")) { store?.selectedPage?.goBack() }.keyboardShortcut(.leftArrow, modifiers: [.command, .option]).disabled(store?.visiblePage?.canGoBack != true)
+            Button(L10n.string("Forward")) { store?.selectedPage?.goForward() }.keyboardShortcut(.rightArrow, modifiers: [.command, .option]).disabled(store?.visiblePage?.canGoForward != true)
+            Button(L10n.string("Next Tab")) { store?.cycleTab(1) }.keyboardShortcut(.tab, modifiers: .control)
+            Button(L10n.string("Previous Tab")) { store?.cycleTab(-1) }.keyboardShortcut(.tab, modifiers: [.control, .shift])
+            Button(L10n.string("Paste and Go")) { if let text = NSPasteboard.general.string(forType: .string) { browser().navigate(text) } }
+            Button(L10n.string("Paste and Search")) { if let text = NSPasteboard.general.string(forType: .string) { browser().navigate(text, searchOnly: true) } }
         }
-        CommandMenu("Develop") {
-            Button("Inspect in Safari…") { store?.inspectInSafari() }.disabled(store?.visiblePage == nil || store?.visiblePage?.nativePage != nil)
+        CommandMenu(L10n.string("Develop")) {
+            Button(L10n.string("Inspect in Safari…")) { store?.inspectInSafari() }.disabled(store?.visiblePage == nil || store?.visiblePage?.nativePage != nil)
                 .keyboardShortcut("i", modifiers: [.command, .option])
-            Button("Reload Without Cache") { store?.visiblePage?.reload(withoutCache: true) }
+            Button(L10n.string("Reload Without Cache")) { store?.visiblePage?.reload(withoutCache: true) }
                 .disabled(store?.visiblePage == nil || store?.visiblePage?.nativePage != nil)
         }
         CommandGroup(after: .textEditing) {
-            Button("Find on Page…") { store?.showingFind = true }.keyboardShortcut("f")
+            Button(L10n.string("Find on Page…")) { store?.showingFind = true }.keyboardShortcut("f")
                 .disabled(store?.visiblePage == nil || store?.visiblePage?.nativePage != nil)
         }
-        CommandMenu("Browse") {
-            Button("Close Peek") { store?.dismissPeek() }.keyboardShortcut(.escape, modifiers: []).disabled(store?.peekPage == nil)
-            Button("Reader Mode") { store?.visiblePage?.readerVisible.toggle() }.disabled(store?.visiblePage?.article == nil)
-            Button("JSON Reader") { store?.visiblePage?.readerVisible = false; store?.visiblePage?.showsJSON = true }.disabled(store?.visiblePage?.jsonText == nil)
+        CommandMenu(L10n.string("Browse")) {
+            Button(L10n.string("Close Peek")) { store?.dismissPeek() }.keyboardShortcut(.escape, modifiers: []).disabled(store?.peekPage == nil)
+            Button(L10n.string("Reader Mode")) { store?.visiblePage?.readerVisible.toggle() }.disabled(store?.visiblePage?.article == nil)
+            Button(L10n.string("JSON Reader")) { store?.visiblePage?.readerVisible = false; store?.visiblePage?.showsJSON = true }.disabled(store?.visiblePage?.jsonText == nil)
         }
-        CommandMenu("Library") {
-            Button("Websites I Follow") { browser().openInternal(.feeds) }
-            Button("History") { browser().openInternal(.history) }.keyboardShortcut("y")
-            Button("Bookmarks") { browser().openInternal(.bookmarks) }.keyboardShortcut("b", modifiers: [.command, .option])
-            Button("Bookmark This Tab") { store?.bookmarkCurrentTab() }.keyboardShortcut("d")
-            Button("Bookmark All Tabs…") { store?.bookmarkTabs(store?.session.tabs ?? [], name: "Saved Tabs") }.keyboardShortcut("d", modifiers: [.command, .shift])
-            Button("Show/Hide Bookmark Bar") { store?.toggleBookmarkBar() }.keyboardShortcut("b", modifiers: [.command, .shift])
-            Button("Downloads") { browser().openInternal(.downloads) }.keyboardShortcut("j", modifiers: [.command, .option])
-            Button("Website Data") { browser().openInternal(.data) }
-            Button("Profiles") { browser().openInternal(.profiles) }
+        CommandMenu(L10n.string("Library")) {
+            Button(L10n.string("Websites I Follow")) { browser().openInternal(.feeds) }
+            Button(L10n.string("History")) { browser().openInternal(.history) }.keyboardShortcut("y")
+            Button(L10n.string("Bookmarks")) { browser().openInternal(.bookmarks) }.keyboardShortcut("b", modifiers: [.command, .option])
+            Button(L10n.string("Bookmark This Tab")) { store?.bookmarkCurrentTab() }.keyboardShortcut("d")
+            Button(L10n.string("Bookmark All Tabs…")) { store?.bookmarkTabs(store?.session.tabs ?? [], name: "Saved Tabs") }.keyboardShortcut("d", modifiers: [.command, .shift])
+            Button(L10n.string("Show/Hide Bookmark Bar")) { store?.toggleBookmarkBar() }.keyboardShortcut("b", modifiers: [.command, .shift])
+            Button(L10n.string("Downloads")) { browser().openInternal(.downloads) }.keyboardShortcut("j", modifiers: [.command, .option])
+            Button(L10n.string("Website Data")) { browser().openInternal(.data) }
+            Button(L10n.string("Profiles")) { browser().openInternal(.profiles) }
         }
     }
 }

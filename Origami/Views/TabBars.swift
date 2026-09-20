@@ -420,7 +420,7 @@ struct TabBars: View {
         Button { store.select(tab.id) } label: {
             HStack(spacing: 4) {
                 SiteIcon(store: store, url: tab.url, size: 14)
-                Text(tab.title).font(.system(size: 11, weight: store.session.selectedTabID == tab.id ? .medium : .regular)).lineLimit(1)
+                Text(tab.displayTitle).font(.system(size: 11, weight: store.session.selectedTabID == tab.id ? .medium : .regular)).lineLimit(1)
             }.frame(maxWidth: .infinity, minHeight: appearance.tabHeight)
                 .padding(.horizontal, 6).contentShape(Rectangle())
         }.buttonStyle(.plain)

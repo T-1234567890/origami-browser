@@ -47,7 +47,7 @@ struct SiteInformation: View {
 
             if let page, origin != nil {
                 Divider()
-                Label(page.connectionSecurity.rawValue, systemImage: page.connectionSecurity.symbol)
+                Label(L10n.string(page.connectionSecurity.rawValue), systemImage: page.connectionSecurity.symbol)
                     .foregroundStyle(page.connectionSecurity.warning ? Color.red : Color.primary)
                 Text(page.connectionSecurity == .secure ? "Certificate validated by WebKit. Encryption does not establish that this website is trustworthy." : page.connectionSecurity == .insecure ? "This connection is not encrypted and has no TLS certificate. Others may read or change data in transit." : page.connectionSecurity == .mixed ? "The HTTPS certificate was accepted, but some page content is not secure." : "No validated connection is available for this navigation.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -58,7 +58,7 @@ struct SiteInformation: View {
                 VStack(spacing: 0) {
                     ForEach(permissions, id: \.0) { permission, title in
                         HStack {
-                            Text(title)
+                            Text(L10n.string(title))
                             Spacer(minLength: 16)
                             Menu {
                                 Picker(title, selection: Binding(get: { decisions[permission] ?? .ask }, set: {
@@ -69,7 +69,7 @@ struct SiteInformation: View {
                                     Text("Block").tag(PermissionDecision.block)
                                 }.pickerStyle(.inline)
                             } label: {
-                                Text((decisions[permission] ?? .ask).rawValue.capitalized)
+                                Text(L10n.string((decisions[permission] ?? .ask).rawValue.capitalized))
                                     .frame(width: 42, alignment: .trailing)
                             }
                             .menuStyle(.borderlessButton).fixedSize().controlSize(.small)
@@ -107,7 +107,7 @@ struct SiteInformation: View {
     private func navigationRow(_ title: String, destination: InternalPage) -> some View {
         Button { dismiss(); store.openInternal(destination) } label: {
             HStack {
-                Text(title)
+                Text(L10n.string(title))
                 Spacer()
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .medium)).foregroundStyle(.tertiary)
             }.frame(height: 28).contentShape(Rectangle())

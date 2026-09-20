@@ -26,7 +26,7 @@ struct Omnibox: NSViewRepresentable {
         field.cell?.isScrollable = true
         field.lineBreakMode = .byClipping
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        field.placeholderString = placeholder
+        field.placeholderString = L10n.string(placeholder)
         field.isBezeled = false
         field.drawsBackground = false
         field.font = .systemFont(ofSize: fontSize)
@@ -73,7 +73,7 @@ struct Omnibox: NSViewRepresentable {
             }
         }
         private func reconcile(_ field: AddressField) {
-            field.placeholderString = parent.placeholder
+            field.placeholderString = L10n.string(parent.placeholder)
             field.appearance = NSAppearance(named: parent.colorScheme == .dark ? .darkAqua : .aqua)
             if !parent.suggestionsEnabled { dismissSuggestions() }
             if remoteAllowed != parent.allowRemote {
@@ -81,7 +81,7 @@ struct Omnibox: NSViewRepresentable {
             }
             if lastTabID != parent.tabID {
                 dismissSuggestions(); lastTabID = parent.tabID
-                if editing { field.window?.makeFirstResponder(nil) }
+                if editing { endOwnedEditing(field) }
                 editing = false; reportEditing(false)
             }
             // A focused, untouched address must follow redirects and HTTP fallback.
@@ -106,6 +106,11 @@ struct Omnibox: NSViewRepresentable {
         }
         private func displayAddress(_ field: NSTextField) {
             field.attributedStringValue = OmniboxPresentation.attributedDisplay(parent.value, font: .systemFont(ofSize: parent.fontSize), connectionWarning: parent.connectionWarning)
+        }
+        private func endOwnedEditing(_ field: NSTextField) {
+            guard let window = field.window,
+                  window.firstResponder === field || window.firstResponder === field.currentEditor() else { return }
+            window.makeFirstResponder(nil)
         }
         func reportEditing(_ value: Bool) {
             pendingEditing = value
@@ -153,10 +158,7 @@ struct Omnibox: NSViewRepresentable {
                 self.completionPending = false
                 guard self.active, self.parent.tabID == tabID,
                       self.parent.focusRequest == focusRequest else { return }
-                if let field, let window = field.window,
-                   window.firstResponder === field || window.firstResponder === field.currentEditor() {
-                    window.makeFirstResponder(nil)
-                }
+                if let field { self.endOwnedEditing(field) }
                 self.editing = false
                 self.reportEditing(false)
                 if let submission { navigate(submission.0, submission.1) }

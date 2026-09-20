@@ -52,7 +52,7 @@ private struct ModelSearchList: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Search models…", text: $query).textFieldStyle(.roundedBorder)
             if settings.provider == .openRouter {
-                Text("Web search is billed separately, including for free models.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(L10n.string("Web search is billed separately, including for free models.")).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if !error.isEmpty { Text(error).font(.caption).foregroundStyle(.secondary) }
             ScrollView {
@@ -68,7 +68,7 @@ private struct ModelSearchList: View {
                 }
             }
         }.padding(16).frame(width: 330, height: 350)
-            .task { if settings.provider == .openRouter { do { try await settings.refreshOpenRouterCatalog() } catch { self.error = "Couldn’t refresh models. Showing saved results." } } }
+            .task { if settings.provider == .openRouter { do { try await settings.refreshOpenRouterCatalog() } catch { self.error = L10n.string("Couldn’t refresh models. Showing saved results.") } } }
     }
 }
 
@@ -78,13 +78,13 @@ struct AskModeControl: View {
     @Binding var mode: AskMode
     @State private var showing = false
     var body: some View {
-        Button { showing = true } label: { Label(mode.rawValue, systemImage: "slider.horizontal.3").font(.caption) }
+        Button { showing = true } label: { Label(L10n.string(mode.rawValue), systemImage: "slider.horizontal.3").font(.caption) }
             .buttonStyle(.plain).foregroundStyle(.secondary)
             .popover(isPresented: $showing) {
                 VStack(spacing: 14) {
-                    Text(mode.rawValue).font(.headline)
+                    Text(L10n.string(mode.rawValue)).font(.headline)
                     Slider(value: Binding(get: { Double(AskMode.allCases.firstIndex(of: mode) ?? 0) }, set: { mode = AskMode.allCases[Int($0.rounded())] }), in: 0...2, step: 1).tint(appearance.accent)
-                        .accessibilityLabel("Answer mode").accessibilityValue(mode.rawValue)
+                        .accessibilityLabel("Answer mode").accessibilityValue(L10n.string(mode.rawValue))
                     HStack { ForEach(AskMode.allCases, id: \.self) { value in Button(value.rawValue) { mode = value }.buttonStyle(.plain).font(.caption).frame(maxWidth: .infinity) } }
                     Divider()
                     Toggle("Generated Visuals", isOn: $settings.generatedVisuals).toggleStyle(.switch).controlSize(.small)
@@ -116,7 +116,7 @@ struct AskTimeline: View {
             }
             if selecting { Text("\(selected.count) selected").font(.caption).foregroundStyle(.secondary) }
             if !historyError.isEmpty { Text(historyError).font(.caption).foregroundStyle(.secondary) }
-            if events.isEmpty { Text(store.isPrivate ? "Private explorations aren’t saved to history." : "Your questions will appear here.").foregroundStyle(.secondary) }
+            if events.isEmpty { Text(store.isPrivate ? L10n.string("Private explorations aren’t saved to history.") : L10n.string("Your questions will appear here.")).foregroundStyle(.secondary) }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(events) { event in
@@ -149,9 +149,9 @@ struct AskTimeline: View {
                 do {
                     try store.services?.ai.deleteHistory(selected, profile: store.session.profileID)
                     events.removeAll { selected.contains($0.id) }; selected = []; selecting = false
-                } catch { historyError = "Couldn’t delete the selected history." }
+                } catch { historyError = L10n.string("Couldn’t delete the selected history.") }
             }
-        } message: { Text("Their prompts, answers, references, visuals, and versions will be permanently deleted. This cannot be undone.") }
+        } message: { Text(L10n.string("Their prompts, answers, references, visuals, and versions will be permanently deleted. This cannot be undone.")) }
         .task { reload() }
         .onReceive(NotificationCenter.default.publisher(for: .origamiHistoryChanged)) { _ in reload() }
     }
@@ -200,9 +200,9 @@ struct AskComposerOptions: View {
                         ModelSearchList(didSelect: { page = "Options" }, selection: $model, allowsDefault: true)
                     } else if page == "Mode" {
                         VStack(spacing: 16) {
-                            Text(mode.rawValue).font(.headline)
+                            Text(L10n.string(mode.rawValue)).font(.headline)
                             Slider(value: Binding(get: { Double(AskMode.allCases.firstIndex(of: mode) ?? 0) }, set: { mode = AskMode.allCases[Int($0.rounded())] }), in: 0...2, step: 1)
-                                .accessibilityLabel("Answer mode").accessibilityValue(mode.rawValue)
+                                .accessibilityLabel("Answer mode").accessibilityValue(L10n.string(mode.rawValue))
                             HStack { ForEach(AskMode.allCases, id: \.self) { item in Button(item.rawValue) { mode = item }.buttonStyle(.plain).frame(maxWidth: .infinity) } }.font(.caption)
                         }.padding(16)
                     } else {

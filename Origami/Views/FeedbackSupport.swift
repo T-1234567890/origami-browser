@@ -98,7 +98,7 @@ struct FeedbackSupportPopover: View {
     private func row(_ title: String, symbol: String, link: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol).frame(width: 18).foregroundStyle(.secondary)
-            Text(title)
+            Text(L10n.string(title))
             Spacer(minLength: 8)
             if link {
                 Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)

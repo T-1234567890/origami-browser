@@ -7,6 +7,7 @@ import SecurityInterface
 final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     @ObservationIgnored let linkPeekObserver = LinkPeekObserver()
     let highlighter = WebHighlighterController()
+    let passwordFill = PasswordFillController()
     let webView: WKWebView
     var destinationHistory = TabDestinationHistory()
     var nativeRevision = 0
@@ -38,6 +39,17 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     @ObservationIgnored private var mediaTask: Task<Void, Never>?
     @ObservationIgnored private let mediaObserver = MediaFrameObserver()
     var mediaState = TabMediaState()
+    private(set) var zoomLevel = 1.0
+    var canZoom: Bool { nativePage == nil && !readerVisible && !(showsJSON && jsonText != nil) }
+    func zoom(increasing: Bool) {
+        guard canZoom else { return }
+        zoomLevel = PageZoom.step(from: zoomLevel, increasing: increasing)
+        webView.pageZoom = zoomLevel
+    }
+    func resetZoom() {
+        zoomLevel = 1
+        webView.pageZoom = 1
+    }
     var mediaArtwork: MediaArtworkService { services?.mediaArtwork ?? standaloneArtwork }
     @ObservationIgnored private let standaloneArtwork = MediaArtworkService()
     var faviconLoading = false
@@ -96,12 +108,18 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         configuration.userContentController.addUserScript(WKUserScript(source: MediaSessionScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         ScriptRuntime.install((try? services?.power.scripts(profileID)) ?? [], controller: configuration.userContentController)
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        configuration.preferences.isElementFullscreenEnabled = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         configuration.userContentController.add(linkPeekObserver, contentWorld: LinkPeekObserver.world, name: "origamiLinkHover")
         configuration.userContentController.addUserScript(WKUserScript(source: LinkPeekObserver.source, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: LinkPeekObserver.world))
         highlighter.allowed = { [weak self] in self?.isPassivePreview == false && self?.nativePage == nil && self?.readerVisible == false }
         highlighter.install(on: webView, manager: services?.highlighter, profile: profileID)
+        passwordFill.allowed = { [weak self] in
+            guard let self else { return false }
+            return !self.isPassivePreview && self.nativePage == nil && !self.readerVisible && self.connectionSecurity == .secure
+        }
+        passwordFill.install(on: webView)
         mediaObserver.webView = webView
         mediaObserver.changed = { [weak self] in self?.refreshMediaState() }
         configuration.userContentController.add(mediaObserver, name: "origamiMedia")
@@ -141,7 +159,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func confirmAction(_ message: String) async -> Bool {
         await withCheckedContinuation { continuation in
-            pageDialog.show(relativeTo: webView, title: "Confirm", message: message, accept: "Confirm") { continuation.resume(returning: $0 != nil) }
+            pageDialog.show(relativeTo: webView, title: L10n.string("Confirm"), message: message, accept: "Confirm") { continuation.resume(returning: $0 != nil) }
         }
     }
     func setMuted(_ muted: Bool) async {
@@ -150,6 +168,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
     private func refreshMediaState() {
         var next = nativePage == nil ? mediaObserver.current : TabMediaState()
+        next.preserveArtwork(from: mediaState)
         next.hasCapture = webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none
         if next.isRelevant, next.artworkURL != mediaState.artworkURL, let url = next.artworkURL { services?.mediaArtwork.prefetch(url) }
         if next != mediaState { mediaState = next }
@@ -251,6 +270,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         documentTask?.cancel(); documentGeneration = UUID(); article = nil; readerVisible = false; jsonText = nil; discoveredFeeds = []; responseDetails = nil; navigationStarted = Date()
     }
     func dispose() {
+        passwordFill.dispose()
         highlighter.dispose()
         documentTask?.cancel()
         dismissDialog()
@@ -268,6 +288,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         onChange = nil; openTab = nil; createPopup = nil
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        passwordFill.reset()
         securityCommitted = false
         resetDocuments()
         errorMessage = nil; favicon = nil; faviconTask?.cancel(); faviconLoading = false; update()
@@ -296,6 +317,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard nativePage == nil else { return }
         errorMessage = nil
         update()
+        passwordFill.refresh()
         loadFavicon()
         if let navigationStarted { responseDetails?.seconds = Date().timeIntervalSince(navigationStarted) }
         scheduleDocumentDiscovery()
@@ -324,7 +346,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard nativePage == nil else { return }
-        errorMessage = "This page stopped responding. Reload to continue."
+        errorMessage = L10n.string("This page stopped responding. Reload to continue.")
         update()
     }
     func applyConnectionPolicy(to preferences: WKWebpagePreferences) {
@@ -371,7 +393,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 if decision == .block { return }
                 if decision == .allow { services?.externalProtocols.openOnce(url); return }
                 let source = navigationAction.sourceFrame.request.url
-                pageDialog.choices(relativeTo: webView, title: "Open an external application?",
+                pageDialog.choices(relativeTo: webView, title: L10n.string("Open an external application?"),
                                    message: "\(source?.host ?? "This page") wants to open a \(scheme): link.") { [weak self] response in
                     guard let self else { return }
                     if let source, let origin = PermissionService.origin(source), response == "Always Open" || response == "Block" {

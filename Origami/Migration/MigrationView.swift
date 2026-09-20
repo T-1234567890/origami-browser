@@ -20,10 +20,10 @@ struct MigrationImportContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if store.isPrivate {
-                Text("Open a regular window to import browser data.")
+                Text(L10n.string("Open a regular window to import browser data."))
             } else if flow.completed {
                 Label("You’re ready to browse", systemImage: "checkmark.circle.fill").font(.headline)
-                Text(flow.replace ? "Your selected data has been imported into this profile." : "Your data is saved in a separate profile. Your existing data is unchanged.").foregroundStyle(.secondary)
+                Text(flow.replace ? L10n.string("Your selected data has been imported into this profile.") : L10n.string("Your data is saved in a separate profile. Your existing data is unchanged.")).foregroundStyle(.secondary)
                 if !onboarding { Button("Import Another Browser") { flow.reset() } }
             } else if let source = flow.source {
                 HStack {
@@ -33,7 +33,7 @@ struct MigrationImportContent: View {
                     Button("Change") { flow.reset() }.disabled(flow.busy)
                 }
                 if flow.busy {
-                    HStack { Spacer(); ProgressView("Getting your data ready…"); Spacer() }.padding(.vertical, 20)
+                    HStack { Spacer(); ProgressView(L10n.string("Getting your data ready…")); Spacer() }.padding(.vertical, 20)
                 } else if let profile = flow.profile {
                     if flow.profiles.count > 1 {
                         Picker("Profile", selection: $flow.selected) {
@@ -46,14 +46,14 @@ struct MigrationImportContent: View {
                         if let tabs = profile.tabs { Toggle("Open and pinned tabs (\(tabs.count))", isOn: $flow.selection.tabs) }
                         if profile.search != nil { Toggle("Use this browser’s search engine", isOn: $flow.selection.search) }
                     }.toggleStyle(.checkbox)
-                    if !flow.replace { Text("Imported into a separate profile. Your existing browsing data stays as it is.").font(.callout).foregroundStyle(.secondary) }
+                    if !flow.replace { Text(L10n.string("Imported into a separate profile. Your existing browsing data stays as it is.")).font(.callout).foregroundStyle(.secondary) }
                     if !profile.notes.isEmpty || !onboarding {
                         DisclosureGroup("More options & details") {
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(profile.notes, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                                 if !onboarding {
                                     Toggle("Replace data in the current profile instead", isOn: $flow.replace)
-                                    if flow.replace { Text("This permanently overwrites selected data in this profile. Back up your data first.").foregroundStyle(.orange) }
+                                    if flow.replace { Text(L10n.string("This permanently overwrites selected data in this profile. Back up your data first.")).foregroundStyle(.orange) }
                                 }
                             }.padding(.top, 8)
                         }.font(.callout)
@@ -66,13 +66,13 @@ struct MigrationImportContent: View {
                     Text(error).foregroundStyle(.secondary)
                     HStack {
                         Button("Try Again") { flow.choose(source) }
-                        if flow.needsAccess { Button("Allow Access…") { flow.grantAccess() } }
+                        if flow.needsAccess { Button(L10n.string("Allow Access…")) { flow.grantAccess() } }
                     }
                 }
             } else {
-                Text("Bring your bookmarks, history and tabs from another browser.").foregroundStyle(.secondary)
+                Text(L10n.string("Bring your bookmarks, history and tabs from another browser.")).foregroundStyle(.secondary)
                 if flow.sources.isEmpty {
-                    Text("No supported browsers were found on this Mac. You can skip this and import later in Settings.").font(.callout)
+                    Text(L10n.string("No supported browsers were found on this Mac. You can skip this and import later in Settings.")).font(.callout)
                     Button("Check Again") { flow.sources = MigrationDiscovery.installed() }
                 } else {
                     ForEach(flow.sources) { source in
@@ -86,14 +86,14 @@ struct MigrationImportContent: View {
                         }.buttonStyle(.plain)
                     }
                 }
-                Text("Passwords and sign-ins stay with your other browser.").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.string("Passwords and sign-ins stay with your other browser.")).font(.caption).foregroundStyle(.secondary)
             }
         }
         .task { if !store.isPrivate { flow.discover() } }
-        .confirmationDialog("Replace this profile’s browsing data?", isPresented: $confirming, titleVisibility: .visible) {
+        .confirmationDialog(L10n.string("Replace this profile’s browsing data?"), isPresented: $confirming, titleVisibility: .visible) {
             Button("Replace Selected Data", role: .destructive) { performImport() }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("Selected bookmarks, history and tabs will be permanently replaced. This cannot be undone. Unavailable categories are kept.") }
+        } message: { Text(L10n.string("Selected bookmarks, history and tabs will be permanently replaced. This cannot be undone. Unavailable categories are kept.")) }
     }
     private func browserIcon(_ source: MigrationSource) -> some View {
         Group {
@@ -107,6 +107,6 @@ struct MigrationImportContent: View {
         do {
             let session = try store.importBrowserProfile(profile, selection: flow.selection, replace: flow.replace && !onboarding, openImported: !onboarding)
             flow.completed = true; flow.error = nil; imported?(session)
-        } catch { flow.error = (error as? MigrationFailure)?.errorDescription ?? "Import couldn’t finish. Your other browser’s data is unchanged." }
+        } catch { flow.error = (error as? MigrationFailure)?.errorDescription ?? L10n.string("Import couldn’t finish. Your other browser’s data is unchanged.") }
     }
 }

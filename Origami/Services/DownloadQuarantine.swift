@@ -7,8 +7,8 @@ struct DownloadQuarantine {
     enum Failure: LocalizedError {
         case invalidDestination, verificationFailed
         var errorDescription: String? {
-            "Origami could not verify quarantine protection for this download. The file was not marked complete and cannot be opened from Origami. Choose a local destination and retry."
-        }
+        L10n.string("Origami could not verify quarantine protection for this download. The file was not marked complete and cannot be opened from Origami. Choose a local destination and retry.")
+    }
     }
     static func metadataURL(_ url: URL?) -> URL? {
         guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? ""),

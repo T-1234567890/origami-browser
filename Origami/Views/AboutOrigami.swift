@@ -10,7 +10,7 @@ private final class AboutPanel: NSPanel {
     private init() {
         let window = AboutPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 490),
                               styleMask: [.borderless], backing: .buffered, defer: false)
-        window.title = "About Origami"
+        window.title = L10n.string("About Origami")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isOpaque = false
@@ -21,14 +21,14 @@ private final class AboutPanel: NSPanel {
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: AboutOrigamiView(open: { _ in }))
+        window.contentView = NSHostingView(rootView: AboutOrigamiView(open: { _ in }).modifier(LiveLanguage()))
         super.init(window: window)
     }
     required init?(coder: NSCoder) { nil }
     func present(open: @escaping (URL) -> Void) {
         window?.contentView = NSHostingView(rootView: AboutOrigamiView(open: { [weak self] url in
             self?.close(); open(url)
-        }))
+        }).modifier(LiveLanguage()))
         if window?.isVisible != true { window?.center() }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
@@ -71,6 +71,7 @@ struct AboutOrigamiView: View {
             else if #available(macOS 26, *) { Color.clear.glassEffect(.regular, in: .rect(cornerRadius: 16)) }
             else { Rectangle().fill(.regularMaterial) }
         }
+        .environment(\.locale, L10n.locale)
         .ignoresSafeArea()
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(alignment: .topLeading) {
@@ -82,7 +83,7 @@ struct AboutOrigamiView: View {
         }
     }
     private func actionLabel(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
+        Label(L10n.string(title), systemImage: symbol)
             .frame(maxWidth: .infinity).frame(height: 30)
             .background(Color.primary.opacity(0.07), in: Capsule())
             .contentShape(Capsule())
@@ -124,10 +125,10 @@ struct OrigamiCreditsView: View {
                         }
                     }
                 )) {
-                    Text(document.text() ?? "This notice is unavailable in this build.")
+                    Text(document.text() ?? L10n.string("This notice is unavailable in this build."))
                         .font(.system(size: 12)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                } label: { Text(document.title).font(.headline) }
+                } label: { Text(L10n.string(document.title)).font(.headline) }
             }
         }
     }
@@ -139,6 +140,6 @@ enum SettingsScope {
     static func label(category: String, profile: BrowserProfile) -> String? {
         guard profile.id != BrowserProfile.defaultID else { return nil }
         let kind: ProfileDataKind? = category == "Appearance" ? .appearance : category == "Tabs" ? .layout : nil
-        return kind.map { profile.sharing[$0] ? "Synchronized with default profile" : profile.name } ?? "Synchronized with default profile"
+        return kind.map { profile.sharing[$0] ? L10n.string("Synchronized with default profile") : profile.name } ?? L10n.string("Synchronized with default profile")
     }
 }

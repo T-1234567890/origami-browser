@@ -45,6 +45,8 @@ final class BrowserWindowState {
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.styleMask.insert(.fullSizeContentView)
+        window.collectionBehavior.remove(.fullScreenNone)
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.isOpaque = false
         window.backgroundColor = .clear
         isFullScreen = window.styleMask.contains(.fullScreen) == true

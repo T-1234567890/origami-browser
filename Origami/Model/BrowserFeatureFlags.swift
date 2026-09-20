@@ -2,6 +2,12 @@ import Foundation
 
 /// Internal launch flags; intentionally absent from user preferences and onboarding.
 enum BrowserFeatureFlags {
+    static let passwordAutoFill = passwordAutoFillEnabled(environment: ProcessInfo.processInfo.environment)
+
+    static func passwordAutoFillEnabled(environment: [String: String]) -> Bool {
+        environment["ORIGAMI_ENABLE_PASSWORD_AUTOFILL"] == "1"
+    }
+
     static let compactSidebar = compactSidebarEnabled(environment: ProcessInfo.processInfo.environment)
 
     static func compactSidebarEnabled(environment: [String: String]) -> Bool {

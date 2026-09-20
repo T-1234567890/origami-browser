@@ -10,6 +10,7 @@ enum MediaSessionScript {
       const documentID = [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
       const records = new WeakMap(), handlers = new Map(), tracked = new Set(), observed = new WeakSet(), handled = new WeakSet();
       let sequence = 0, timer = null, reported = false;
+      let publishedLive = false;
       const pauseLifetime = 120000;
       function record(element) {
         if (!records.has(element)) records.set(element, {id: documentID + ':' + (++sequence), played: false, activityAt: 0, pausedAt: 0, wasConnected: element.isConnected});
@@ -53,16 +54,41 @@ enum MediaSessionScript {
         });
         return choices.sort((a,b)=>a.score-b.score)[0]?.url || '';
       }
+      function youtubeIsLive(element) {
+        if (!/(^|\.)youtube\.com$/.test(location.hostname) || element.tagName !== 'VIDEO') return false;
+        const player = element.closest('.html5-video-player');
+        if (!player) return false;
+        if (player.classList.contains('ytp-live')) return true;
+        // Current YouTube layouts expose a Live badge without the old ytp-live
+        // class. VOD retains that node but hides it, so existence alone is unsafe.
+        const badge = player.querySelector('.ytp-live-badge');
+        if (!badge || !badge.getClientRects().length) return false;
+        for (let node = badge; node && node !== player; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (node.hidden || style.display === 'none' || style.visibility === 'hidden') return false;
+        }
+        return true;
+      }
       function snapshot() {
         const element = candidates()[0];
         if (!element) return null;
         const state = record(element), metadata = session?.metadata;
-        const duration = Number.isFinite(element.duration) && element.duration > 0 ? element.duration : null;
+        const range = element.seekable;
+        const start = range.length === 1 ? range.start(0) : null;
+        const end = range.length === 1 ? range.end(0) : null;
+        // Finite DVR windows can still be live. Require both edges and the duration
+        // to advance; an ordinary partially buffered VOD must not become "live".
+        if (state.source !== element.currentSrc) { state.range = null; state.slidingLive = false; state.source = element.currentSrc; }
+        if (state.range && [start,end,state.range.start,state.range.end].every(Number.isFinite) && start > state.range.start && end > state.range.end && element.duration > state.range.duration) state.slidingLive = true;
+        state.range = {start, end, duration:element.duration};
+        const youtubeLive = youtubeIsLive(element);
+        const live = element.duration === Infinity || youtubeLive || state.slidingLive === true;
+        const duration = !live && Number.isFinite(element.duration) && element.duration > 0 ? element.duration : null;
         const currentTime = Number.isFinite(element.currentTime) && element.currentTime >= 0 ? element.currentTime : null;
         const seekable = element.seekable;
         const canSeek = duration !== null && seekable.length === 1 && seekable.start(0) <= 0.1 && seekable.end(0) >= duration - 0.5;
         const artwork = artworkURL(metadata?.artwork) || (element.poster || '');
-        return {id: state.id, phase: element.paused ? 'paused' : 'playing', live: element.duration === Infinity,
+        return {id: state.id, phase: element.paused ? 'paused' : 'playing', live,
           title: String(metadata?.title || document.title || '').slice(0,512), source: location.hostname,
           artwork: String(artwork).slice(0,4096), currentTime, duration, canSeek,
           previous: handlers.has('previoustrack'), next: handlers.has('nexttrack'), muted: element.muted,
@@ -70,6 +96,18 @@ enum MediaSessionScript {
       }
       function report() {
         const media = snapshot();
+        // Correct finite DVR timelines through the public Media Session API. WebKit
+        // remains the only system Now Playing publisher; no parallel native session.
+        if (session?.setPositionState && (media?.live || publishedLive)) {
+          try {
+            if (media?.live) {
+              session.setPositionState({duration:Infinity, position:media.currentTime || 0, playbackRate:candidates()[0]?.playbackRate || 1});
+            } else if (media?.duration && media.currentTime !== null) {
+              session.setPositionState({duration:media.duration, position:media.currentTime, playbackRate:candidates()[0]?.playbackRate || 1});
+            } else { session.setPositionState(); }
+            publishedLive = media?.live === true;
+          } catch (_) { /* Older WebKit may reject infinite duration; do not invent a finite one. */ }
+        }
         for (const element of tracked) {
           const state = record(element);
           if (!state.played || element.ended || element.error || state.wasConnected && !element.isConnected ||

@@ -45,7 +45,7 @@ struct UpdatesSettings: View {
         Section("Updates") {
             Toggle("Automatically check for updates", isOn: $updates.automaticallyChecks).disabled(!updates.available)
             Picker("Update Channel", selection: $updates.channel) {
-                ForEach(UpdateChannel.allCases) { Text($0.title).tag($0) }
+                ForEach(UpdateChannel.allCases) { Text(L10n.string($0.title)).tag($0) }
             }
             Button("Check for Updates…") { updates.check() }.disabled(!updates.available || !updates.canCheck)
             if !updates.available { Text("Updates are not configured for this build.").font(.caption).foregroundStyle(.secondary) }
@@ -105,13 +105,13 @@ struct UpdateCommands: Commands {
     @ObservedObject private var updates = UpdateService.shared
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("About Origami") { AboutOrigamiWindow.shared.present { url in
+            Button(L10n.string("About Origami")) { AboutOrigamiWindow.shared.present { url in
                 let store = application.activeStore ?? application.newWindow()
                 store.newTab(url: url); store.nativeWindow?.makeKeyAndOrderFront(nil)
             } }
         }
         CommandGroup(after: .appInfo) {
-            Button("Check for Updates…") { updates.check() }.disabled(!updates.available || !updates.canCheck)
+            Button(L10n.string("Check for Updates…")) { updates.check() }.disabled(!updates.available || !updates.canCheck)
         }
     }
 }

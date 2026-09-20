@@ -19,6 +19,14 @@ struct TabMediaState: Equatable {
     var isPlayingMedia: Bool { phase == .playing }
     var isRelevant: Bool { id != nil && phase != .inactive }
 
+    mutating func preserveArtwork(from previous: TabMediaState) {
+        // Some players clear MediaMetadata briefly when toggling playback. Keep the
+        // same track's artwork, but never carry it to another track or session.
+        guard isRelevant, previous.isRelevant, id == previous.id,
+              title == previous.title, source == previous.source, artworkURL == nil else { return }
+        artworkURL = previous.artworkURL
+    }
+
     init() {}
     init(snapshot: [String: Any]) {
         guard let id = snapshot["id"] as? String, !id.isEmpty, id.count <= 200,

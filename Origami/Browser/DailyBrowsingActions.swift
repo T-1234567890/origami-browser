@@ -37,11 +37,11 @@ extension BrowserStore {
             let state = await MediaStateService().sample(page.webView)
             let internalPage = page.nativePage != nil
             let playback = await page.webView.requestMediaPlaybackState()
-            guard (internalPage || (!state.isPlayingMedia && !page.mediaState.isPlayingMedia && playback != .playing)), !state.hasCapture, !page.isLoading else { if !automatic { persistenceError = "This tab is loading, playing media or using capture. Stop that activity before sleeping it." }; return }
+            guard (internalPage || (!state.isPlayingMedia && !page.mediaState.isPlayingMedia && playback != .playing)), !state.hasCapture, !page.isLoading else { if !automatic { persistenceError = L10n.string("This tab is loading, playing media or using capture. Stop that activity before sleeping it.") }; return }
             let property = automatic ? "safeToSleep" : "canManuallySleep"
             let inspected = (try? await page.webView.evaluateJavaScript("window.__origamiActivity?.\(property) === true")) as? Bool ?? false
             let safe = internalPage || inspected
-            guard safe else { if !automatic { persistenceError = "This page has unsaved input or an active connection, or its activity could not be checked. It has been kept awake." }; return }
+            guard safe else { if !automatic { persistenceError = L10n.string("This page has unsaved input or an active connection, or its activity could not be checked. It has been kept awake.") }; return }
             guard pages[id] === page, page.currentURL == inspectedURL, !page.isLoading, let currentTab = session.tabs.first(where: { $0.id == id }) else { return }
             if automatic, let services {
                 var activity = page.activity
@@ -55,7 +55,7 @@ extension BrowserStore {
               !session.tabs[current].isPinned, services?.downloads.hasActiveDownload(tabID: id) != true else { return }
         if let url = session.tabs[current].url, let origin = PermissionService.origin(url),
            (try? services?.permissions.siteRule("never_sleep", origin: origin, profileID: session.profileID)) == true {
-            if !automatic { persistenceError = "This site is excluded from sleeping. Remove its Never Sleep exception in Website Permissions to sleep it." }
+            if !automatic { persistenceError = L10n.string("This site is excluded from sleeping. Remove its Never Sleep exception in Website Permissions to sleep it.") }
             return
         }
         pages.removeValue(forKey: id)?.dispose()

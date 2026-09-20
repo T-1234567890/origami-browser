@@ -63,10 +63,10 @@ struct QuickTools: View {
             }
     }
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 9) { Text(title).font(.caption).foregroundStyle(.secondary); content() }.padding(.bottom, 10)
+        VStack(alignment: .leading, spacing: 9) { Text(L10n.string(title)).font(.caption).foregroundStyle(.secondary); content() }.padding(.bottom, 10)
     }
     private func command(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Label(title, systemImage: icon).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }.buttonStyle(.plain).padding(.vertical, 3)
+        Button(action: action) { Label(L10n.string(title), systemImage: icon).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }.buttonStyle(.plain).padding(.vertical, 3)
     }
     private func run(_ script: UserScript) {
         guard let page else { return }

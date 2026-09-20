@@ -107,6 +107,7 @@ struct ContentView: View {
             }.ignoresSafeArea().allowsHitTesting(false)
         }
         .overlay { AISetupPrompt(store: store) }
+
     }
 
     var body: some View {
@@ -151,8 +152,9 @@ struct ContentView: View {
         }
         .onChange(of: store.session.selectedTabID) {
             store.resolveConfirmation(false)
-            // End editing before reflecting another tab's address.
-            NSApp.keyWindow?.makeFirstResponder(nil)
+            // Omnibox ends only its own editing session. Clearing the key window's
+            // responder here can blur a newly clicked login field in Split View,
+            // or a field belonging to another browser window.
         }
         .popover(isPresented: Binding(get: { store.confirmationMessage != nil }, set: { if !$0 { store.resolveConfirmation(false) } })) {
             VStack(alignment: .leading, spacing: 14) {
@@ -240,7 +242,15 @@ struct ContentView: View {
 
     private var addressField: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            if let page = store.visiblePage, page.canZoom, abs(page.zoomLevel - 1) > 0.001 {
+                Button { page.resetZoom() } label: {
+                    Image(systemName: PageZoom.symbol(for: page.zoomLevel)).foregroundStyle(.secondary)
+                }.buttonStyle(.plain)
+                    .help(L10n.format("Zoom: %lld%% — click to reset", Int64((page.zoomLevel * 100).rounded())))
+                    .accessibilityLabel("Reset Zoom")
+            } else {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            }
             Omnibox(store: store, allowRemote: remoteSuggestionsAllowed, tabID: store.session.selectedTabID, value: store.selectedTab?.url?.absoluteString ?? "", focusRequest: store.focusRequest, connectionWarning: store.visiblePage?.connectionSecurity.warning == true, canFocus: !vertical || sidebarShown, suggestionAnchor: suggestionAnchor, editingChanged: { editingOmnibox = $0 }) {
                 store.navigate($0, searchOnly: $1)
             }.frame(height: 18)
@@ -276,6 +286,9 @@ struct ContentView: View {
                     PageFindBar(page: page) { store.showingFind = false }.id(page.tabID).padding(12)
                 }
             }
+            .overlay {
+                if !onboarding { FloatingMediaControl(store: store) }
+            }
             .padding(onboarding || (!showsContentFrame && store.session.activeSplit == nil) ? 0 : BrowserChromeMetrics.contentFrameWidth)
 
     }
@@ -304,6 +317,9 @@ struct BrowserContentView: View {
                 } else {
                     WebViewContainer(webView: page.webView, dismissDialog: page.dismissDialog, activated: { if store.session.activeSplit != nil { store.select(tab.id) } })
                         .overlay { WebHighlighterToolbar(controller: page.highlighter) }
+                        .overlay { PasswordFillButton(controller: page.passwordFill) }
+                        .onDisappear { page.passwordFill.reset() }
+                        .onChange(of: store.session.selectedTabID) { page.passwordFill.reset() }
                         .task(id: page.currentURL) { page.highlighter.refresh() }
                         .overlay(alignment: .topTrailing) {
                             if page.jsonText != nil && !page.showsJSON {

@@ -63,7 +63,7 @@ struct InternalContent<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text(title).font(.title2.weight(.semibold))
+                Text(L10n.string(title)).font(.title2.weight(.semibold))
                 content()
             }.frame(maxWidth: 800, alignment: .leading).padding(32).frame(maxWidth: .infinity)
         }

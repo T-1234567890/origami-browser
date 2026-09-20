@@ -5,7 +5,7 @@ import GRDB
 enum MigrationReader {
     static func read(_ root: URL, browser: MigrationBrowser) throws -> [MigrationProfile] {
         if ["html", "htm"].contains(root.pathExtension.lowercased()) {
-            return [MigrationProfile(name: browser.rawValue, bookmarks: try html(MigrationInput.read(root)), notes: ["Bookmarks export only. Other browser data is not included."])]
+            return [MigrationProfile(name: browser.rawValue, bookmarks: try html(MigrationInput.read(root)), notes: [L10n.string("Bookmarks export only. Other browser data is not included.")])]
         }
         guard try root.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { throw MigrationFailure.unsupported }
         let markers = browser.gecko ? ["places.sqlite"] : browser.chromium ? ["Bookmarks", "History", "Preferences"] : ["Bookmarks.plist", "History.db", "bookmarks.html"]
@@ -65,8 +65,8 @@ enum MigrationReader {
                 }
             }
             part("Previous session") { result.tabs = try ChromiumMigrationSession.read(folder) }
-            if result.tabs != nil { result.notes.append("Standard unencrypted session tabs and pins are supported. Browser-specific tab groups and spaces are not transferred.") }
-            if browser == .arc { result.notes.append("Arc spaces, favorites and sidebar folders are not inferred from proprietary sidebar data. Use a bookmarks export for those items.") }
+            if result.tabs != nil { result.notes.append(L10n.string("Standard unencrypted session tabs and pins are supported. Browser-specific tab groups and spaces are not transferred.")) }
+            if browser == .arc { result.notes.append(L10n.string("Arc spaces, favorites and sidebar folders are not inferred from proprietary sidebar data. Use a bookmarks export for those items.")) }
         } else if browser.gecko {
             part("Bookmarks and history") {
                 if let file = try MigrationInput.child("places.sqlite", in: folder) {
@@ -89,7 +89,7 @@ enum MigrationReader {
                     result.search = search(meta?["defaultEngineId"] as? String ?? meta?["current"] as? String)
                 }
             }
-            if browser == .zen { result.notes.append("Firefox-compatible session tabs are imported. Zen container identities and workspace isolation are not transferred.") }
+            if browser == .zen { result.notes.append(L10n.string("Firefox-compatible session tabs are imported. Zen container identities and workspace isolation are not transferred.")) }
         } else {
             part("Bookmarks") {
                 if let file = try MigrationInput.child("Bookmarks.plist", in: folder),
@@ -102,12 +102,12 @@ enum MigrationReader {
                     result.history = try visits(file, sql: "SELECT i.url,v.title,v.visit_time AS time FROM history_visits v JOIN history_items i ON i.id=v.history_item ORDER BY v.visit_time DESC LIMIT 100001", scale: 1, offset: 978_307_200)
                 }
             }
-            result.notes.append("Safari/Orion sessions, tab groups and search preferences are unavailable in this adapter. Import each source profile separately when exporting bookmarks.")
+            result.notes.append(L10n.string("Safari/Orion sessions, tab groups and search preferences are unavailable in this adapter. Import each source profile separately when exporting bookmarks."))
         }
-        if result.bookmarks == nil { result.notes.append("Bookmarks unavailable.") }
-        if result.history == nil { result.notes.append("History unavailable.") }
-        if result.tabs == nil { result.notes.append("Open/pinned tabs and groups unavailable.") }
-        if result.search == nil { result.notes.append("Search engine not available or not supported by Origami; your preference stays unchanged.") }
+        if result.bookmarks == nil { result.notes.append(L10n.string("Bookmarks unavailable.")) }
+        if result.history == nil { result.notes.append(L10n.string("History unavailable.")) }
+        if result.tabs == nil { result.notes.append(L10n.string("Open/pinned tabs and groups unavailable.")) }
+        if result.search == nil { result.notes.append(L10n.string("Search engine not available or not supported by Origami; your preference stays unchanged.")) }
         if let accessError { throw accessError }
         guard result.hasData else { throw MigrationFailure.unsupported }
         return result

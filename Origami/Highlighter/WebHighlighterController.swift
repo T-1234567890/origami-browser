@@ -86,9 +86,9 @@ import Observation
             refreshTask = Task { [weak self, weak webView] in
                 guard !Task.isCancelled, let webView else { return }
                 do { _ = try await webView.callAsyncJavaScript("window.__origamiHighlighter?.configure(value)", arguments: ["value": value], in: nil, contentWorld: HighlightScript.world) }
-                catch { if !Task.isCancelled { self?.error = "Highlights couldn’t be displayed on this page." } }
+                catch { if !Task.isCancelled { self?.error = L10n.string("Highlights couldn’t be displayed on this page.") } }
             }
-        } catch { self.error = "Saved highlights couldn’t be loaded." }
+        } catch { self.error = L10n.string("Saved highlights couldn’t be loaded.") }
     }
     func apply(style: HighlightStyle?, remove: Bool = false, expectedTool: HighlightTool? = nil) async {
         guard !busy, let selected = selection, let manager, manager.enabled, allowed?() == true,
@@ -109,7 +109,7 @@ import Observation
                 try manager.store.save(record, profile: profile)
             }
             manager.revision += 1; refresh()
-        } catch { self.error = "The highlight couldn’t be saved. Try selecting the text again." }
+        } catch { self.error = L10n.string("The highlight couldn’t be saved. Try selecting the text again.") }
     }
 }
 
@@ -187,7 +187,7 @@ struct WebHighlighterSettings: View {
             Picker("Default highlight style", selection: $manager.style) {
                 ForEach(HighlightStyle.allCases) { Text($0.title).tag($0) }
             }
-            Text("Use the bottom panel to enable highlighting or erasing, then select text. Click a saved highlight to erase it. Turning Highlighter off hides saved highlights without deleting them. Private highlights last only for that private window.")
+            Text(L10n.string("Use the bottom panel to enable highlighting or erasing, then select text. Click a saved highlight to erase it. Turning Highlighter off hides saved highlights without deleting them. Private highlights last only for that private window."))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

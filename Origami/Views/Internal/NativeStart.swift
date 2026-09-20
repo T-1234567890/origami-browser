@@ -175,7 +175,7 @@ struct NativeWelcome: View {
                         Color.clear
                     }
                 }.frame(width: 64, height: 64).accessibilityHidden(true)
-                Text(titles[step]).font(.system(size: 30, weight: .medium)).multilineTextAlignment(.center)
+                Text(L10n.string(titles[step])).font(.system(size: 30, weight: .medium)).multilineTextAlignment(.center)
                 Group {
                     switch step {
                     case 0:
@@ -260,14 +260,14 @@ private struct OnboardingPrivacyChoice: View {
             VStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 30, weight: .light))
                     .frame(height: 36).accessibilityHidden(true)
-                Text(title).font(.system(size: 15, weight: selected ? .medium : .regular))
+                Text(L10n.string(title)).font(.system(size: 15, weight: selected ? .medium : .regular))
                 Capsule().fill(selected ? appearance.accent : .clear).frame(width: 32, height: 2)
             }
             .foregroundStyle(selected ? appearance.accent : .secondary)
             .frame(maxWidth: .infinity).padding(.vertical, 10)
             .contentShape(Rectangle())
         }.buttonStyle(.plain)
-            .accessibilityLabel(title)
+            .accessibilityLabel(L10n.string(title))
             .accessibilityValue(selected ? "Selected" : "Not selected")
             .accessibilityAddTraits(selected ? .isSelected : [])
     }

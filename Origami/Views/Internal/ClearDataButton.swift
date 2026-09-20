@@ -19,7 +19,7 @@ struct ClearDataButton: View {
                     }
                     if !historyOnly {
                         ForEach(options, id: \.0) { key, title in
-                            Toggle(title, isOn: Binding(get: { categories.contains(key) }, set: { if $0 { categories.insert(key) } else { categories.remove(key) } })).toggleStyle(.checkbox)
+                            Toggle(L10n.string(title), isOn: Binding(get: { categories.contains(key) }, set: { if $0 { categories.insert(key) } else { categories.remove(key) } })).toggleStyle(.checkbox)
                         }
                     }
                     Text("Shared categories are cleared for every profile using that data. Private window data remains separate.").font(.caption).foregroundStyle(.secondary)
