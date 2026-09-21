@@ -5,10 +5,27 @@ import GRDB
 @testable import Origami
 
 @MainActor struct Phase3ABrowsingTests {
-    @Test func nonDocumentFileLinksDoNotOpenPeek() throws {
+    @Test func fileLinksOpenPassivePeekWithoutNavigating() throws {
         let store = BrowserStore()
         defer { store.dismissPeek(); store.pages.values.forEach { $0.dispose() } }
-        for address in ["https://example.com/image.JPG", "https://example.com/app.dmg", "https://www.google.com/imgres?imgurl=https://example.com/a"] {
+        let originalTabs = store.session.tabs.count
+        // Renderable files and metadata-only files both open Peek. Neither starts a web download.
+        for name in ["image.JPG", "animation.gif", "notes.md", "text.txt", "rich.rtf", "report.pdf", "app.dmg"] {
+            store.openPeek(try #require(URL(string: "https://example.invalid/" + name)))
+            let page = try #require(store.peekPage)
+            #expect(page.isPassivePreview)
+            #expect(page.webView.url == nil)
+            #expect(!page.webView.isLoading)
+            #expect(store.session.tabs.count == originalTabs)
+            store.dismissPeek()
+        }
+    }
+    @Test func excludedLinksDoNotOpenPeek() throws {
+        let store = BrowserStore()
+        defer { store.dismissPeek(); store.pages.values.forEach { $0.dispose() } }
+        for address in ["https://www.google.com/imgres?imgurl=https://example.invalid/a",
+                        "https://example.invalid/movie.mp4", "file:///tmp/example.txt",
+                        "javascript:alert(1)", "https://user:password@example.invalid/file.txt"] {
             store.openPeek(try #require(URL(string: address)))
             #expect(store.peekPage == nil)
         }
