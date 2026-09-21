@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import PDFKit
 
 /// Two native information layers in one fixed-size preview; no AI dependencies.
 struct PeekCard: View {
@@ -22,9 +23,12 @@ struct PeekCard: View {
     init(page: TabPage, url: URL, viewport: CGSize, mode: PeekMode, open: @escaping () -> Void, dismiss: @escaping () -> Void, swiping: @escaping (Bool) -> Void) {
         self.page = page; self.url = url; self.viewport = viewport; self.mode = mode
         self.open = open; self.dismiss = dismiss; self.swiping = swiping
-        _layer = State(initialValue: mode.initialLayer); _preview = State(initialValue: PeekPreview(url: url))
+        let type = PeekPreview.documentType(url)
+        let initialLayer: PeekLayer = type != nil && type != "PDF" && !PeekExtraction.isImageType(type) && !PeekExtraction.isTextType(type) ? .structured : mode.initialLayer
+        _layer = State(initialValue: initialLayer); _preview = State(initialValue: PeekPreview(url: url))
     }
     private var documentType: String? { PeekPreview.documentType(url) ?? PeekPreview.documentType(mime: page.responseDetails?.mime) }
+    private var filePreviewUnavailable: Bool { documentType != nil && !loading && !preview.hasFilePreview }
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
@@ -47,7 +51,10 @@ struct PeekCard: View {
                                 .frame(width: size.width, height: size.height)
                                 .background(Color(nsColor: .textBackgroundColor))
                                 .clipShape(RoundedRectangle(cornerRadius: 7))
-                        } else { content(structured: false) }
+                        } else {
+                            documentPreview
+                                .padding(PeekLayout.contentInset)
+                        }
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .accessibilityHidden(layer != .normal).allowsHitTesting(layer == .normal)
@@ -82,6 +89,7 @@ struct PeekCard: View {
             try? await Task.sleep(for: .seconds(10))
             guard !Task.isCancelled, loading else { return }
             loading = false
+            if documentType != nil && !preview.hasFilePreview { switchLayer(.structured) }
             if documentType == nil { page.webView.stopLoading() }
         }
         .task(id: "\(page.isLoading)-\(page.webView.url?.absoluteString ?? url.absoluteString)-\(documentType ?? "page")") {
@@ -91,6 +99,7 @@ struct PeekCard: View {
             if let documentType {
                 let result = await PeekExtraction.document(PeekPreview.destinationURL(loaded: page.webView.url, requested: url), type: documentType)
                 guard !Task.isCancelled else { return }; preview = result; loading = false
+                if !result.hasFilePreview { switchLayer(.structured) }
             } else {
                 guard !page.isLoading else { return }
                 // A second bounded pass covers metadata added just after DOM load.
@@ -113,17 +122,37 @@ struct PeekCard: View {
     private func boundedTravel(width: CGFloat) -> CGFloat {
         layer == .normal ? max(-width, min(0, travel)) : min(width, max(0, travel))
     }
+    private var documentPreview: some View {
+        Group {
+            if let data = preview.pdfData {
+                PeekPDFView(data: data)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            } else if let data = preview.imageData {
+                PeekImageView(data: data, animates: !reduceMotion && layer == .normal)
+            } else if let text = preview.textPreview {
+                PeekTextView(text: text)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            } else if loading {
+                ProgressView().controlSize(.small).accessibilityLabel("Loading preview")
+            } else {
+                Text(L10n.string("Preview unavailable. Open the file to view it."))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(12)
+            }
+        }
+    }
     private func finishSwipe(_ x: CGFloat, _ y: CGFloat) {
         switchLayer(layer.moved(horizontal: x, vertical: y))
     }
     private func switchLayer(_ next: PeekLayer) {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) { layer = next; travel = 0 }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) { layer = filePreviewUnavailable ? .structured : next; travel = 0 }
     }
     private func layerButton(_ title: String, _ value: PeekLayer) -> some View {
         Button { switchLayer(value) } label: {
             Text(title).padding(.horizontal, 7).padding(.vertical, 4)
                 .background(layer == value ? Color.primary.opacity(0.08) : .clear, in: Capsule())
-        }.accessibilityAddTraits(layer == value ? [.isSelected] : [])
+        }.disabled(value == .normal && filePreviewUnavailable)
+            .accessibilityAddTraits(layer == value ? [.isSelected] : [])
             .help(value == .structured ? "Swipe horizontally for details" : "Show normal preview")
     }
     private func content(structured: Bool) -> some View {
@@ -184,6 +213,79 @@ struct PeekCard: View {
           }.scrollIndicators(.hidden)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Read-only native text layout, with scrolling and selection but no web execution.
+private struct PeekTextView: NSViewRepresentable {
+    let text: NSAttributedString
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        if let view = scroll.documentView as? NSTextView {
+            view.isEditable = false
+            view.isSelectable = true
+            view.textContainerInset = NSSize(width: 10, height: 10)
+            view.isHorizontallyResizable = false
+            view.textContainer?.widthTracksTextView = true
+            view.backgroundColor = .textBackgroundColor
+        }
+        return scroll
+    }
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let view = scroll.documentView as? NSTextView,
+              view.textStorage?.isEqual(to: text) != true else { return }
+        view.textStorage?.setAttributedString(text)
+        view.scrollToBeginningOfDocument(nil)
+    }
+}
+
+/// NSImageView preserves native GIF animation without loading an executable webpage.
+private struct PeekImageView: NSViewRepresentable {
+    let data: Data
+    let animates: Bool
+    final class Coordinator { var data: Data? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.imageAlignment = .alignCenter
+        return view
+    }
+    func updateNSView(_ view: NSImageView, context: Context) {
+        if context.coordinator.data != data {
+            context.coordinator.data = data
+            view.image = NSImage(data: data)
+        }
+        view.animates = animates
+    }
+    static func dismantleNSView(_ view: NSImageView, coordinator: Coordinator) {
+        view.animates = false
+        view.image = nil
+    }
+}
+
+/// Render the actual pages, independently from the extracted Details summary.
+private struct PeekPDFView: NSViewRepresentable {
+    let data: Data
+    final class Coordinator {
+        var data: Data?
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.displayMode = .singlePageContinuous
+        view.displayDirection = .vertical
+        view.autoScales = true
+        view.backgroundColor = .textBackgroundColor
+        return view
+    }
+    func updateNSView(_ view: PDFView, context: Context) {
+        guard context.coordinator.data != data else { return }
+        context.coordinator.data = data
+        view.document = PDFDocument(data: data)
+        view.autoScales = true
     }
 }
 

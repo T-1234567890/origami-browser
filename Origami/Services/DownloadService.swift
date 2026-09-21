@@ -1,17 +1,23 @@
 import AppKit
 import WebKit
 import Observation
+import UniformTypeIdentifiers
 
 @MainActor @Observable
-final class DownloadService: NSObject, WKDownloadDelegate {
+final class DownloadService: NSObject, WKDownloadDelegate, NSOpenSavePanelDelegate {
     private struct Transfer {
         let download: WKDownload
+        let sourceWebView: WKWebView?
         var record: DownloadRecord
         var observation: NSKeyValueObservation?
         var lastWrite = Date.distantPast
         var originURL: URL?
         var downloadURL: URL?
         var accessURL: URL?
+        var stagingURL: URL?
+        var cancelled = false
+        var panel: NSSavePanel?
+        var destinationReply: ((URL?) -> Void)?
     }
     private let preferences: BrowserPreferences?
     private let repository: DownloadRepository
@@ -22,47 +28,62 @@ final class DownloadService: NSObject, WKDownloadDelegate {
         }
     }
     private(set) var runningProfiles: Set<UUID> = []
+    @ObservationIgnored private var retryRequests: [UUID: (profile: UUID, request: URLRequest)] = [:]
+    @ObservationIgnored private var retryOrder: [UUID] = []
     var onError: ((String) -> Void)?
+    var destinationSelector: ((String) async -> URL?)?
     var windowForTab: ((UUID) -> NSWindow?)?
     init(repository: DownloadRepository, preferences: BrowserPreferences? = nil) { self.repository = repository; self.preferences = preferences }
-    func accept(_ download: WKDownload, profileID: UUID, tabID: UUID) {
+    func accept(_ download: WKDownload, profileID: UUID, tabID: UUID, sourceWebView: WKWebView? = nil) {
+        guard transfers[ObjectIdentifier(download)] == nil else { return }
         let record = DownloadRecord(profileID: profileID, tabID: tabID, url: DownloadQuarantine.metadataURL(download.originalRequest?.url)?.absoluteString ?? "")
-        transfers[ObjectIdentifier(download)] = Transfer(download: download, record: record, originURL: DownloadQuarantine.metadataURL(download.webView?.url), downloadURL: DownloadQuarantine.metadataURL(download.originalRequest?.url))
+        if let request = download.originalRequest {
+            retryRequests[record.id] = (profileID, request); retryOrder.append(record.id)
+            if retryOrder.count > 100 { retryRequests.removeValue(forKey: retryOrder.removeFirst()) }
+        }
+        transfers[ObjectIdentifier(download)] = Transfer(download: download, sourceWebView: sourceWebView ?? download.webView, record: record, originURL: DownloadQuarantine.metadataURL((sourceWebView ?? download.webView)?.url), downloadURL: DownloadQuarantine.metadataURL(download.originalRequest?.url))
         download.delegate = self
         persist(record)
     }
+    /// Signed query strings and request details stay in memory only. Persisted
+    /// history remains sanitized; after relaunch Retry restarts the saved URL.
+    func retryRequest(for record: DownloadRecord) -> URLRequest? {
+        if let request = retryRequests[record.id]?.request, ["http", "https"].contains(request.url?.scheme) { return request }
+        guard let url = URL(string: record.url), ["http", "https"].contains(url.scheme) else { return nil }
+        return URLRequest(url: url)
+    }
     func hasActiveDownload(tabID: UUID) -> Bool { transfers.values.contains { $0.record.tabID == tabID } }
     func cancel(profileID: UUID) {
-        let ids = transfers.filter { $0.value.record.profileID == profileID }.map(\.key)
-        for id in ids {
-            guard let transfer = transfers.removeValue(forKey: id) else { continue }
-            transfer.download.delegate = nil
-            transfer.download.cancel { _ in }
-            transfer.accessURL?.stopAccessingSecurityScopedResource()
-        }
+        retryRequests = retryRequests.filter { $0.value.profile != profileID }
+        retryOrder.removeAll { retryRequests[$0] == nil }
+        for id in transfers.values.filter({ $0.record.profileID == profileID }).map({ $0.record.id }) { cancel(id) }
     }
     func cancelAll() {
-        for transfer in transfers.values {
-            transfer.download.delegate = nil
-            transfer.download.cancel { _ in }
-            transfer.accessURL?.stopAccessingSecurityScopedResource()
-        }
-        transfers.removeAll()
+        retryRequests.removeAll(); retryOrder.removeAll()
+        for id in transfers.values.map({ $0.record.id }) { cancel(id) }
     }
     func cancel(_ id: UUID) {
-        guard let transfer = transfers.values.first(where: { $0.record.id == id }) else { return }
-        transfer.download.cancel { [weak self] _ in self?.finish(transfer.download, state: .cancelled) }
+        guard let key = transfers.first(where: { $0.value.record.id == id })?.key,
+              var transfer = transfers[key], !transfer.cancelled else { return }
+        transfer.cancelled = true
+        let reply = transfer.destinationReply
+        transfer.destinationReply = nil
+        transfers[key] = transfer
+        transfer.panel?.cancel(nil)
+        reply?(nil)
+        // Retain the service and scoped access until WebKit acknowledges cancellation.
+        transfer.download.cancel { [self] _ in finish(transfer.download, state: .cancelled) }
     }
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping (URL?) -> Void) {
-        guard var transfer = transfers[ObjectIdentifier(download)], let window = download.webView?.window ?? transfer.record.tabID.flatMap({ windowForTab?($0) }) else {
+        guard var transfer = transfers[ObjectIdentifier(download)], !transfer.cancelled else {
             completionHandler(nil); finish(download, state: .cancelled); return
         }
-        let filename = (suggestedFilename as NSString).lastPathComponent
-        transfer.record.filename = filename.isEmpty || [".", ".."].contains(filename) ? "Download" : filename
+        transfer.record.filename = Self.filename(suggestedFilename, mime: response.mimeType)
         transfer.downloadURL = DownloadQuarantine.metadataURL(response.url) ?? transfer.downloadURL
         transfer.record.expected = response.expectedContentLength >= 0 ? response.expectedContentLength : nil
         transfers[ObjectIdentifier(download)] = transfer
+        persist(transfer.record)
         if preferences?.askDownloadDestination == false, let data = preferences?.downloadDirectoryBookmark {
             do {
                 var stale = false
@@ -71,31 +92,77 @@ final class DownloadService: NSObject, WKDownloadDelegate {
                 transfer.accessURL = directory
                 let reserved = Set(transfers.values.compactMap { $0.record.destination })
                 let url = Self.availableDestination(directory: directory, filename: transfer.record.filename, reserved: reserved)
+                transfer.record.filename = url.lastPathComponent
                 transfer.record.destination = url.path; transfer.record.state = .running
                 transfer.observation = observeProgress(download)
                 transfers[ObjectIdentifier(download)] = transfer; persist(transfer.record); completionHandler(url); return
             } catch { onError?(L10n.string("Choose a download folder again to allow access.")) }
         }
+        transfers[ObjectIdentifier(download)]?.destinationReply = completionHandler
+        if let destinationSelector {
+            let name = transfer.record.filename
+            Task { @MainActor [self] in
+                completeDestination(await destinationSelector(name), download: download)
+            }
+            return
+        }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = transfer.record.filename
         panel.canCreateDirectories = true
-        panel.beginSheetModal(for: window) { [weak self] result in
-            guard let self else { completionHandler(nil); return }
-            guard result == .OK, let url = panel.url, var transfer = self.transfers[ObjectIdentifier(download)] else {
-                completionHandler(nil); self.finish(download, state: .cancelled); return
-            }
-            guard !FileManager.default.fileExists(atPath: url.path) else {
-                completionHandler(nil); self.finish(download, state: .failed, error: L10n.string("Choose a filename that does not already exist.")); return
-            }
-            if url.startAccessingSecurityScopedResource() { transfer.accessURL = url }
-            transfer.record.destination = url.path
-            transfer.record.bookmark = try? url.bookmarkData(options: .withSecurityScope)
-            transfer.record.state = .running
-            transfer.observation = observeProgress(download)
-            self.transfers[ObjectIdentifier(download)] = transfer
-            self.persist(transfer.record)
-            completionHandler(url)
+        panel.delegate = self
+        transfers[ObjectIdentifier(download)]?.panel = panel
+        let completion: (NSApplication.ModalResponse) -> Void = { [weak self] result in
+            self?.completeDestination(result == .OK ? panel.url : nil, download: download)
         }
+        if let window = download.webView?.window ?? transfer.record.tabID.flatMap({ windowForTab?($0) }), window.attachedSheet == nil {
+            panel.beginSheetModal(for: window, completionHandler: completion)
+        } else {
+            // Downloads outlive their source tab. A standalone panel also avoids
+            // trying to attach a second save sheet during concurrent downloads.
+            panel.begin(completionHandler: completion)
+        }
+    }
+    func panel(_ sender: Any, validate url: URL) throws {
+        guard !FileManager.default.fileExists(atPath: url.path),
+              !transfers.values.contains(where: { $0.record.destination == url.path }) else {
+            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteFileExistsError,
+                          userInfo: [NSLocalizedDescriptionKey: L10n.string("Choose a filename that does not already exist.")])
+        }
+    }
+    private func completeDestination(_ selected: URL?, download: WKDownload) {
+        let key = ObjectIdentifier(download)
+        guard var transfer = transfers[key], let reply = transfer.destinationReply else { return }
+        transfer.destinationReply = nil; transfer.panel = nil
+        transfers[key] = transfer
+        guard let selected, !transfer.cancelled else {
+            reply(nil); finish(download, state: .cancelled); return
+        }
+        if selected.startAccessingSecurityScopedResource() { transfer.accessURL = selected }
+        let reserved = Set(transfers.values.compactMap { $0.record.destination })
+        guard !reserved.contains(selected.path), !FileManager.default.fileExists(atPath: selected.path) else {
+            transfer.accessURL?.stopAccessingSecurityScopedResource()
+            reply(nil); finish(download, state: .failed, error: L10n.string("Choose a filename that does not already exist.")); return
+        }
+        // The save panel grants access to this exact URL, not arbitrary siblings.
+        // Stage in our container and move without replacing any existing file.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("OrigamiDownload-" + UUID().uuidString)
+        transfer.stagingURL = url
+        transfer.record.filename = selected.lastPathComponent
+        transfer.record.destination = selected.path
+        transfer.record.state = .running
+        transfer.observation = observeProgress(download)
+        transfers[key] = transfer
+        persist(transfer.record)
+        reply(url)
+    }
+    static func filename(_ suggested: String, mime: String?) -> String {
+        let leaf = (suggested as NSString).lastPathComponent
+        let safe = leaf.components(separatedBy: .controlCharacters).joined().replacingOccurrences(of: ":", with: "-")
+        var name = safe.isEmpty || [".", ".."].contains(safe) ? "Download" : safe
+        if (name as NSString).pathExtension.isEmpty, let mime, let ext = UTType(mimeType: mime)?.preferredFilenameExtension {
+            name += "." + ext
+        }
+        return name
     }
     private func observeProgress(_ download: WKDownload) -> NSKeyValueObservation {
         download.progress.observe(\.completedUnitCount, options: [.new]) { [weak self, weak download] _, _ in
@@ -107,7 +174,7 @@ final class DownloadService: NSObject, WKDownloadDelegate {
     private func updateProgress(_ download: WKDownload) {
         let key = ObjectIdentifier(download)
         guard var transfer = transfers[key] else { return }
-        transfer.record.received = download.progress.completedUnitCount
+        transfer.record.received = max(0, download.progress.completedUnitCount)
         if download.progress.totalUnitCount > 0 { transfer.record.expected = download.progress.totalUnitCount }
         if Date().timeIntervalSince(transfer.lastWrite) >= 0.5 {
             persist(transfer.record); transfer.lastWrite = Date()
@@ -120,14 +187,28 @@ final class DownloadService: NSObject, WKDownloadDelegate {
     }
     private func finish(_ download: WKDownload, state: DownloadState, error: String? = nil) {
         guard var transfer = transfers.removeValue(forKey: ObjectIdentifier(download)) else { return }
-        transfer.record.state = state; transfer.record.error = error
-        if state == .completed {
+        let finalState: DownloadState = transfer.cancelled ? .cancelled : state
+        transfer.record.state = finalState; transfer.record.error = finalState == .cancelled ? nil : error
+        transfer.observation?.invalidate()
+        transfer.panel?.cancel(nil)
+        transfer.destinationReply?(nil)
+        if finalState == .completed, let staged = transfer.stagingURL, let destination = transfer.record.destination {
+            do {
+                try DownloadQuarantine.enforce(at: staged, downloadURL: transfer.downloadURL, originURL: transfer.originURL)
+                try FileManager.default.moveItem(at: staged, to: URL(fileURLWithPath: destination))
+            } catch {
+                transfer.record.state = .failed
+                transfer.record.error = L10n.string("The download failed. Try again.")
+            }
+        }
+        if finalState == .completed && transfer.record.state == .completed {
             Self.verifyCompletion(&transfer.record, downloadURL: transfer.downloadURL, originURL: transfer.originURL)
         }
         transfer.record.received = max(transfer.record.received, download.progress.completedUnitCount)
         if let path = transfer.record.destination, transfer.record.state == .completed {
             transfer.record.bookmark = try? URL(fileURLWithPath: path).bookmarkData(options: .withSecurityScope)
         }
+        if let staged = transfer.stagingURL { try? FileManager.default.removeItem(at: staged) }
         persist(transfer.record)
         transfer.accessURL?.stopAccessingSecurityScopedResource()
         download.delegate = nil
@@ -161,18 +242,28 @@ final class DownloadService: NSObject, WKDownloadDelegate {
         guard record.state == .completed, let data = record.bookmark else { throw RepositoryError.invalidInput }
         var stale = false
         let url = try URL(resolvingBookmarkData: data, options: .withSecurityScope, bookmarkDataIsStale: &stale)
-        guard !stale else { throw RepositoryError.invalidInput }
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard FileManager.default.fileExists(atPath: url.path) else { throw RepositoryError.invalidInput }
+        if stale { refreshBookmark(record, url: url) }
         // Older records and files whose metadata was removed also pass the gate before explicit Open.
         try DownloadQuarantine.enforce(at: url, downloadURL: URL(string: record.url), originURL: nil)
-        NSWorkspace.shared.open(url)
+        guard NSWorkspace.shared.open(url) else { throw RepositoryError.invalidInput }
     }
     func reveal(_ record: DownloadRecord) throws {
         guard let data = record.bookmark else { throw RepositoryError.invalidInput }
         var stale = false
         let url = try URL(resolvingBookmarkData: data, options: .withSecurityScope, bookmarkDataIsStale: &stale)
-        guard !stale, url.startAccessingSecurityScopedResource() else { throw RepositoryError.invalidInput }
-        defer { url.stopAccessingSecurityScopedResource() }
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard FileManager.default.fileExists(atPath: url.path) else { throw RepositoryError.invalidInput }
+        if stale { refreshBookmark(record, url: url) }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
+    private func refreshBookmark(_ record: DownloadRecord, url: URL) {
+        guard let bookmark = try? url.bookmarkData(options: .withSecurityScope) else { return }
+        var refreshed = record
+        refreshed.bookmark = bookmark; refreshed.destination = url.path
+        persist(refreshed)
+    }
+
 }

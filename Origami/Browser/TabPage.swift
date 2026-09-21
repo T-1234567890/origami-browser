@@ -425,10 +425,10 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         } else { decisionHandler(.allow) }
     }
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
-        services?.downloads.accept(download, profileID: profileID, tabID: tabID)
+        services?.downloads.accept(download, profileID: profileID, tabID: tabID, sourceWebView: webView)
     }
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
-        services?.downloads.accept(download, profileID: profileID, tabID: tabID)
+        services?.downloads.accept(download, profileID: profileID, tabID: tabID, sourceWebView: webView)
     }
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {

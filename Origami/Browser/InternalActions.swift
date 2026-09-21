@@ -126,9 +126,9 @@ extension BrowserStore {
             case "copy": NSPasteboard.general.clearContents(); NSPasteboard.general.setString(record.url, forType: .string)
             case "remove": try services.downloadRepository.remove(record.id, profileID: profileID)
             case "retry":
-                guard let url = PersistedURL.clean(URL(string: record.url)), ["http", "https"].contains(url.scheme) else { throw RepositoryError.invalidInput }
-                let download = await page(for: tabID).webView.startDownload(using: URLRequest(url: url))
-                services.downloads.accept(download, profileID: profileID, tabID: tabID)
+                guard let request = services.downloads.retryRequest(for: record) else { throw RepositoryError.invalidInput }
+                let download = await page(for: tabID).webView.startDownload(using: request)
+                services.downloads.accept(download, profileID: profileID, tabID: tabID, sourceWebView: page(for: tabID).webView)
             default: throw RepositoryError.invalidInput
             }; return true
         case "data.list", "data.remove", "data.clear":

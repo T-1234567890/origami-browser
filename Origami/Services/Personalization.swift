@@ -17,7 +17,7 @@ import Observation
     var glass: String { didSet { defaults.set(glass, forKey: prefix + "appearance.glass") } }
     var defaultAsk: Bool { didSet { defaults.set(defaultAsk, forKey: "newTab.defaultAsk") } }
     var favorites: Bool { didSet { defaults.set(favorites, forKey: prefix + "appearance.favorites") } }
-    var titleImage: Data? { didSet { defaults.set(titleImage, forKey: prefix + "appearance.titleImage") } }
+    private(set) var titleImage: Data? { didSet { defaults.set(titleImage, forKey: prefix + "appearance.titleImage") } }
     var wallpaper: Data? { didSet { defaults.set(wallpaper, forKey: prefix + "appearance.wallpaper"); wallpaperIsDark = Self.isDark(wallpaper) } }
     var wallpaperIsDark = false
     init(defaults: UserDefaults = .standard, prefix: String = "") {
@@ -43,9 +43,22 @@ import Observation
         frame = defaults.string(forKey: prefix + "appearance.frame") ?? (defaults.object(forKey: "browser.contentFrame") as? Bool == false ? "Off" : "Subtle")
         glass = defaults.string(forKey: prefix + "appearance.glass") ?? "Standard"
         favorites = defaults.object(forKey: prefix + "appearance.favorites") as? Bool ?? true
-        titleImage = defaults.data(forKey: prefix + "appearance.titleImage")
+        titleImage = defaults.data(forKey: prefix + "appearance.titleImage").flatMap { try? TitleImageLoader.normalized($0) }
         wallpaper = defaults.data(forKey: prefix + "appearance.wallpaper")
         wallpaperIsDark = Self.isDark(wallpaper)
+    }
+    @ObservationIgnored private var titleImageRevision = 0
+    func resetTitleImage() { titleImageRevision += 1; titleImage = nil }
+    func replaceTitleImage(from url: URL?) async throws {
+        // A cancelled picker is a no-op, including when a previous image exists.
+        guard let url else { return }
+        titleImageRevision += 1
+        let revision = titleImageRevision
+        let result = await Task.detached(priority: .userInitiated) { Result { try TitleImageLoader.read(url) } }.value
+        guard revision == titleImageRevision, !Task.isCancelled else { return }
+        let normalized = try TitleImageLoader.normalized(result.get())
+        guard revision == titleImageRevision, !Task.isCancelled else { return }
+        if titleImage != normalized { titleImage = normalized }
     }
     private static func isDark(_ data: Data?) -> Bool {
         guard let data, let image = NSImage(data: data), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return false }
@@ -120,8 +133,8 @@ struct AppearanceSettings: View {
             Toggle("Show pinned and favorite sites", isOn: $settings.favorites)
             LabeledContent("New Tab title image") {
                 HStack {
-                    Button("Choose PNG or SVG…", action: chooseTitleImage)
-                    if settings.titleImage != nil { Button("Reset") { settings.titleImage = nil } }
+                    Button("Choose PNG or SVG…", action: chooseTitleImage).accessibilityIdentifier("chooseTitleImage")
+                    if settings.titleImage != nil { Button("Reset") { settings.resetTitleImage() }.accessibilityIdentifier("resetTitleImage") }
                 }
             }.font(.body)
             LabeledContent("Background") {
@@ -138,16 +151,17 @@ struct AppearanceSettings: View {
         return Color(red: Double(n >> 16)/255, green: Double((n >> 8)&255)/255, blue: Double(n&255)/255)
     }
     private func chooseTitleImage() {
+        // Capture the model while the view is mounted. Do not resolve its
+        // Environment property later from a picker callback after a profile switch.
+        let target = settings
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.png, .svg]; panel.allowsMultipleSelection = false
         panel.begin { result in
             guard result == .OK, let url = panel.url else { return }
-            let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
-            do {
-                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 4_000_000 else { error = L10n.string("Choose an image smaller than 4 MB."); return }
-                let data = try Data(contentsOf: url)
-                guard let image = NSImage(data: data), image.size.width > 0, image.size.height > 0 else { error = L10n.string("This PNG or SVG could not be opened."); return }
-                settings.titleImage = data; error = nil
-            } catch { self.error = "This image could not be read." }
+            Task { @MainActor in
+                do { try await target.replaceTitleImage(from: url); error = nil }
+                catch TitleImageLoader.Failure.oversized { error = L10n.string("Choose an image smaller than 4 MB.") }
+                catch { self.error = L10n.string("This PNG or SVG could not be opened.") }
+            }
         }
     }
     private func chooseWallpaper() {

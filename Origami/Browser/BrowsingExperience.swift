@@ -44,7 +44,7 @@ extension BrowserStore {
         page.openPeek = { [weak self] in self?.openPeek($0) }
         page.openTab = { [weak self] in self?.newTab(url: $0.url) }
         page.isPassivePreview = true
-        // A non-HTML response stays as a metadata card; never initiate a download.
+        // File responses use the bounded native preview or Details; never initiate a download.
         page.previewUnavailable = { }
         peekPage = page; peekURL = url
         if PeekPreview.documentType(url) == nil { page.load(url) }

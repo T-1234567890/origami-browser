@@ -1,6 +1,8 @@
 import Foundation
 import WebKit
 import PDFKit
+import ImageIO
+import UniformTypeIdentifiers
 
 // The preference controls presentation only, never AI or provider routing.
 enum PeekMode: String, CaseIterable, Identifiable {
@@ -44,6 +46,11 @@ struct PeekPreview: Equatable {
     var fileType: String?
     var fileSize: Int64?
     var pageCount: Int?
+    // Reuse the bounded, in-memory fetch for rendering; never persist peeked documents.
+    var pdfData: Data?
+    var imageData: Data?
+    var textPreview: NSAttributedString?
+    var hasFilePreview: Bool { pdfData != nil || imageData != nil || textPreview != nil }
     var hasDetails: Bool {
         !overview.isEmpty || !author.isEmpty || formattedDate != nil || !headings.isEmpty ||
         minutes != nil || fileType != nil || imageURL != nil || (!category.isEmpty && category != "website" && category != "WebPage")
@@ -69,20 +76,29 @@ struct PeekPreview: Equatable {
         display.timeZone = TimeZone(secondsFromGMT: 0)
         return display.string(from: date)
     }
-    static let documentExtensions = Set(["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pages", "numbers", "key", "rtf", "odt", "ods", "odp"])
+    static let textExtensions = Set(["md", "markdown", "txt", "text", "rtf", "csv", "tsv", "json", "xml", "yaml", "yml", "log", "ini", "toml", "css", "js", "swift", "py", "sh"])
+    static let imageExtensions = Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "heic", "heif", "tif", "tiff", "bmp", "ico", "svg"])
+    static let documentExtensions = Set(["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pages", "numbers", "key", "rtf", "odt", "ods", "odp", "zip", "gz", "tar", "dmg", "pkg", "exe", "msi", "csv", "txt", "json", "xml", "rss", "atom", "mp3", "wav", "ogg", "woff", "woff2", "ttf"])
     static func documentType(_ url: URL) -> String? {
-        documentExtensions.contains(url.pathExtension.lowercased()) ? url.pathExtension.uppercased() : nil
+        (documentExtensions.contains(url.pathExtension.lowercased()) || imageExtensions.contains(url.pathExtension.lowercased()) || textExtensions.contains(url.pathExtension.lowercased())) ? url.pathExtension.uppercased() : nil
     }
     static func documentType(mime: String?) -> String? {
-        switch mime?.lowercased() {
+        if let mime = mime?.lowercased(), mime.hasPrefix("image/") {
+            return UTType(mimeType: mime)?.preferredFilenameExtension?.uppercased() ?? String(mime.dropFirst(6)).uppercased()
+        }
+        return switch mime?.lowercased() {
         case "application/pdf": "PDF"
+        case "text/markdown", "text/x-markdown": "MD"
+        case "application/rtf", "text/rtf": "RTF"
+        case "text/plain": "TXT"
         case "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document": L10n.string("Word document")
         case "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": L10n.string("Spreadsheet")
         case "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation": L10n.string("Presentation")
         case "application/vnd.apple.pages": L10n.string("Pages document")
         case "application/vnd.apple.numbers": L10n.string("Numbers spreadsheet")
         case "application/vnd.apple.keynote": L10n.string("Keynote presentation")
-        default: nil
+        case nil, "", "text/html", "application/xhtml+xml": nil
+        default: mime.flatMap { UTType(mimeType: $0)?.preferredFilenameExtension?.uppercased() } ?? mime
         }
     }
     init(url: URL) {
@@ -147,7 +163,7 @@ enum PeekExtraction {
         var result = PeekPreview(url: url)
         guard ReaderMedia.safeURL(url.absoluteString) != nil else { return result }
         result.fileType = type ?? result.fileType
-        // Office/iWork previews use response metadata only; no archive expansion or execution.
+        // Unsupported documents use response metadata only; no archive expansion or execution.
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil; configuration.urlCache = nil
         configuration.timeoutIntervalForResource = 10
@@ -158,14 +174,96 @@ enum PeekExtraction {
            let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode), response.expectedContentLength > 0 {
             result.fileSize = response.expectedContentLength
         }
-        guard result.fileType == "PDF", result.fileSize == nil || result.fileSize! <= Int64(PeekDocumentLoader.maximumBytes),
+        let isImage = Self.isImageType(result.fileType)
+        guard result.fileType == "PDF" || isImage || Self.isTextType(result.fileType), result.fileSize == nil || result.fileSize! <= Int64(PeekDocumentLoader.maximumBytes),
               !Task.isCancelled, let data = await PeekDocumentLoader.load(url: url, pageURL: nil, userAgent: nil),
               !Task.isCancelled else { return result }
-        return pdf(data, fallback: result)
+        if Self.isTextType(result.fileType) { return await text(data, fallback: result) }
+        return isImage ? image(data, fallback: result) : pdf(data, fallback: result)
+    }
+    static func isTextType(_ type: String?) -> Bool {
+        type.map { PeekPreview.textExtensions.contains($0.lowercased()) } ?? false
+    }
+    @MainActor static func text(_ data: Data, fallback: PeekPreview) -> PeekPreview {
+        var result = fallback
+        // Bound native text parsing/layout independently of the larger PDF/image budget.
+        guard data.count <= 512 * 1024 else { return result }
+        let type = result.fileType?.lowercased()
+        let rendered: NSAttributedString?
+        if type == "rtf" {
+            guard data.starts(with: Data("{\\rtf".utf8)) else { return result }
+            rendered = try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil)
+        } else {
+            let encoding: String.Encoding = data.starts(with: [0xff, 0xfe]) || data.starts(with: [0xfe, 0xff]) ? .utf16 : .utf8
+            guard let value = String(data: data, encoding: encoding), !value.contains("\0") else { return result }
+            if type == "md" || type == "markdown" {
+                rendered = markdown(value)
+            } else {
+                rendered = NSAttributedString(string: value, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular), .foregroundColor: NSColor.textColor])
+            }
+        }
+        guard let rendered else { return result }
+        result.textPreview = rendered
+        result.fileSize = Int64(data.count)
+        result.overview = String(rendered.string.split(whereSeparator: \.isWhitespace).joined(separator: " ").prefix(420))
+        return result
+    }
+    @MainActor private static func markdown(_ value: String) -> NSAttributedString? {
+        guard let parsed = try? AttributedString(markdown: value) else { return nil }
+        let output = NSMutableAttributedString(string: "")
+        var previousBlock: Int?
+        for run in parsed.runs {
+            let block = run.presentationIntent?.components.first?.identity
+            if output.length > 0, block != previousBlock { output.append(NSAttributedString(string: "\n\n")) }
+            previousBlock = block
+            var font = NSFont.systemFont(ofSize: 12)
+            var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.textColor]
+            for component in run.presentationIntent?.components ?? [] {
+                switch component.kind {
+                case .header(let level): font = .systemFont(ofSize: CGFloat(max(13, 23 - level * 2)), weight: .bold)
+                case .codeBlock: font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+                default: break
+                }
+            }
+            if let intent = run.inlinePresentationIntent {
+                if intent.contains(.stronglyEmphasized) { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
+                if intent.contains(.emphasized) { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
+                if intent.contains(.code) { font = .monospacedSystemFont(ofSize: 12, weight: .regular) }
+                if intent.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+            }
+            attributes[.font] = font
+            output.append(NSAttributedString(string: String(parsed[run.range].characters), attributes: attributes))
+        }
+        return output
+    }
+    static func isImageType(_ type: String?) -> Bool {
+        type.map { PeekPreview.imageExtensions.contains($0.lowercased()) } ?? false
+    }
+    static func image(_ data: Data, fallback: PeekPreview) -> PeekPreview {
+        var result = fallback
+        guard data.count <= PeekDocumentLoader.maximumBytes,
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return result }
+        let count = CGImageSourceGetCount(source)
+        guard count > 0, count <= 500 else { return result }
+        // Bound decoded memory as well as compressed bytes, including animated frames.
+        var pixels = 0.0
+        for index in 0..<count {
+            guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
+                  let width = properties[kCGImagePropertyPixelWidth] as? Double,
+                  let height = properties[kCGImagePropertyPixelHeight] as? Double,
+                  width > 0, height > 0, width <= 8192, height <= 8192 else { return result }
+            pixels += width * height
+            guard pixels <= 32_000_000 else { return result }
+        }
+        guard CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { return result }
+        result.fileSize = Int64(data.count)
+        result.imageData = data
+        return result
     }
     static func pdf(_ data: Data, fallback: PeekPreview) -> PeekPreview {
         var result = fallback
         guard data.count <= PeekDocumentLoader.maximumBytes, let pdf = PDFDocument(data: data) else { return result }
+        if !pdf.isLocked, pdf.pageCount > 0 { result.pdfData = data }
         result.fileSize = Int64(data.count); result.pageCount = pdf.pageCount
         if let title = pdf.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String, !title.isEmpty { result.title = String(title.prefix(240)) }
         result.author = String((pdf.documentAttributes?[PDFDocumentAttribute.authorAttribute] as? String ?? "").prefix(100))

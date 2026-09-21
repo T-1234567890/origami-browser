@@ -8,7 +8,7 @@ final class PeekDocumentLoader: NSObject, URLSessionDataDelegate, @unchecked Sen
 
     static func request(url: URL, pageURL: URL?, userAgent: String?) -> URLRequest {
         var request = URLRequest(url: url)
-        request.setValue("application/pdf", forHTTPHeaderField: "Accept")
+        request.setValue("application/pdf, image/*, text/plain, text/markdown, text/rtf, application/rtf, application/json, application/xml", forHTTPHeaderField: "Accept")
         if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
         // Send only the origin, never a private query, fragment or embedded credentials.
         if let pageURL, var origin = URLComponents(url: pageURL, resolvingAgainstBaseURL: false),
@@ -40,6 +40,13 @@ final class PeekDocumentLoader: NSObject, URLSessionDataDelegate, @unchecked Sen
         } onCancel: { session.invalidateAndCancel() }
     }
 
+    static func supports(_ mime: String?) -> Bool {
+        guard let mime = mime?.lowercased() else { return false }
+        return mime == "application/pdf" || mime.hasPrefix("image/") ||
+            (mime.hasPrefix("text/") && mime != "text/html") ||
+            ["application/rtf", "application/json", "application/xml", "application/yaml", "application/javascript", "application/toml"].contains(mime)
+    }
+
     private func finish(_ result: Data?) {
         let completion = continuation
         continuation = nil
@@ -56,7 +63,7 @@ final class PeekDocumentLoader: NSObject, URLSessionDataDelegate, @unchecked Sen
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode),
               response.expectedContentLength <= Self.maximumBytes,
-              response.mimeType?.lowercased() == "application/pdf" else {
+              Self.supports(response.mimeType) else {
             completionHandler(.cancel); return
         }
         completionHandler(.allow)

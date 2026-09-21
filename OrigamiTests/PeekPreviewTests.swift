@@ -1,6 +1,8 @@
 import Testing
 import WebKit
 import PDFKit
+import ImageIO
+import UniformTypeIdentifiers
 @testable import Origami
 
 @MainActor struct PeekPreviewTests {
@@ -74,10 +76,10 @@ import PDFKit
     @Test func documentRecognitionAndUnsafeLinks() {
         #expect(PeekPreview.documentType(mime: "application/pdf") == "PDF")
         #expect(PeekPreview.documentType(mime: "text/html") == nil)
-        for ext in ["pdf", "docx", "pages", "xlsx", "pptx", "key"] {
+        for ext in ["pdf", "docx", "pages", "xlsx", "pptx", "key", "png", "jpg", "gif", "webp", "heic", "tiff", "zip", "txt"] {
             #expect(LinkPeekObserver.canPreview(URL(string: "https://example.com/file.\(ext)")!))
         }
-        for text in ["file:///tmp/test.pdf", "javascript:alert(1)", "https://user:password@example.com/file.pdf", "https://example.com/file.zip"] {
+        for text in ["file:///tmp/test.pdf", "javascript:alert(1)", "https://user:password@example.com/file.pdf"] {
             #expect(!LinkPeekObserver.canPreview(URL(string: text)!))
         }
     }
@@ -133,6 +135,54 @@ import PDFKit
             #expect(config.httpCookieStorage == nil && config.urlCache == nil)
         }
     }
+    @Test func imagePreviewRetainsAnimatedFramesAndRejectsInvalidData() throws {
+        let context = try #require(CGContext(data: nil, width: 8, height: 8, bitsPerComponent: 8,
+            bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let output = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(output, UTType.gif.identifier as CFString, 2, nil))
+        for color in [NSColor.red, NSColor.blue] {
+            context.setFillColor(color.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            let image = try #require(context.makeImage())
+            CGImageDestinationAddImage(destination, image, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary)
+        }
+        #expect(CGImageDestinationFinalize(destination))
+        let fallback = PeekPreview(url: URL(string: "https://example.invalid/image.gif")!)
+        let preview = PeekExtraction.image(output as Data, fallback: fallback)
+        let data = try #require(preview.imageData)
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        #expect(CGImageSourceGetCount(source) == 2)
+        #expect(preview.hasFilePreview && preview.pdfData == nil)
+        #expect(NSImage(data: data) != nil)
+        #expect(!PeekExtraction.image(Data("not an image".utf8), fallback: fallback).hasFilePreview)
+        #expect(!PeekPreview(url: URL(string: "https://example.invalid/report.docx")!).hasFilePreview)
+        #expect(PeekPreview.documentType(mime: "image/gif") == "GIF")
+    }
+    @Test func commonTextPreviewsRenderContentAndRejectBinary() throws {
+        func fallback(_ ext: String) -> PeekPreview {
+            PeekPreview(url: URL(string: "https://example.invalid/file.\(ext)")!)
+        }
+        let plain = "Hello, 世界\nSecond line"
+        for ext in ["txt", "csv", "json", "yaml", "log", "swift"] {
+            #expect(LinkPeekObserver.canPreview(URL(string: "https://example.invalid/file.\(ext)")!))
+            #expect(PeekExtraction.text(Data(plain.utf8), fallback: fallback(ext)).textPreview?.string == plain)
+        }
+        let utf16 = try #require(plain.data(using: .utf16))
+        #expect(PeekExtraction.text(utf16, fallback: fallback("txt")).textPreview?.string == plain)
+        let markdown = PeekExtraction.text(Data("# Heading\n\nA **bold** word.".utf8), fallback: fallback("md"))
+        let formatted = try #require(markdown.textPreview)
+        #expect(formatted.string == "Heading\n\nA bold word.")
+        let headingFont = try #require(formatted.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        #expect(headingFont.pointSize > 12)
+        let rich = NSAttributedString(string: "Rich text", attributes: [.font: NSFont.boldSystemFont(ofSize: 16)])
+        let rtf = try rich.data(from: NSRange(location: 0, length: rich.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+        #expect(PeekExtraction.text(rtf, fallback: fallback("rtf")).textPreview?.string == "Rich text")
+        #expect(!PeekExtraction.text(Data([0, 1, 2]), fallback: fallback("txt")).hasFilePreview)
+        #expect(!PeekExtraction.text(Data(repeating: 65, count: 512 * 1024 + 1), fallback: fallback("txt")).hasFilePreview)
+        #expect(!PeekDocumentLoader.supports("text/html"))
+        #expect(PeekDocumentLoader.supports("text/markdown"))
+        #expect(PeekDocumentLoader.supports("application/rtf"))
+    }
     @Test func pdfMetadataUsesActualDocument() throws {
         let document = PDFDocument()
         let image = NSImage(size: NSSize(width: 30, height: 30))
@@ -143,6 +193,10 @@ import PDFKit
         let preview = PeekExtraction.pdf(data, fallback: PeekPreview(url: URL(string: "https://example.invalid/report.pdf")!))
         #expect(preview.pageCount == 1 && preview.fileSize == Int64(data.count))
         #expect(preview.title == "Synthetic report" && preview.author == "Fixture")
+        let previewData = try #require(preview.pdfData)
+        let rendered = try #require(PDFDocument(data: previewData))
+        #expect(rendered.pageCount == document.pageCount)
+        #expect(rendered.page(at: 0)?.bounds(for: .mediaBox) == document.page(at: 0)?.bounds(for: .mediaBox))
     }
 }
 
