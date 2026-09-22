@@ -5,21 +5,15 @@ import Foundation
 @MainActor struct MigrationDiscoveryTests {
     @Test func discoveryUsesInstalledAppsWithoutReadingBrowserContents() {
         let home = URL(fileURLWithPath: "/synthetic-home")
-        var inspected: [URL] = []
         let sources = MigrationDiscovery.sources(home: home, application: { id in
             id == MigrationBrowser.chrome.bundleID ? URL(fileURLWithPath: "/synthetic-apps/Chrome.app") : nil
-        }, exists: { inspected.append($0); return false })
+        })
         #expect(sources.map(\.browser) == [.chrome])
         #expect(sources.first?.roots.first == home.appending(path: MigrationBrowser.chrome.dataLocations[0]))
-        #expect(inspected.allSatisfy { $0.path.hasPrefix(home.path + "/Library/") })
     }
-    @Test func discoversDataEvenAfterBrowserWasUninstalledAndOmitsMissingBrowsers() {
-        let home = URL(fileURLWithPath: "/synthetic-home")
-        let sources = MigrationDiscovery.sources(home: home, application: { _ in nil }, exists: {
-            $0 == home.appending(path: MigrationBrowser.firefox.dataLocations[0])
-        })
-        #expect(sources.count == 1 && sources.first?.browser == .firefox)
-        #expect(MigrationDiscovery.sources(home: home, application: { _ in nil }, exists: { _ in false }).isEmpty)
+    @Test func omitsBrowsersWithoutAnInstalledApplication() {
+        let sources = MigrationDiscovery.sources(home: URL(fileURLWithPath: "/synthetic-home"), application: { _ in nil })
+        #expect(sources.isEmpty)
         #expect(Set(MigrationBrowser.allCases.map(\.bundleID)).count == 10)
     }
     @Test func onboardingImportSavesSeparateProfileWithoutOpeningAnotherWindow() throws {
@@ -51,11 +45,11 @@ import Foundation
 }
 
 extension MigrationDiscoveryTests {
-    @Test func protectedPrimaryLocationRemainsDiscoverableWhenAlternateExists() {
+    @Test func installedBrowserKeepsAllCandidateDataLocations() {
         let home = URL(fileURLWithPath: "/synthetic-home")
         let sources = MigrationDiscovery.sources(home: home, application: {
             $0 == MigrationBrowser.safari.bundleID ? URL(fileURLWithPath: "/synthetic/Safari.app") : nil
-        }, exists: { $0.path.contains("Containers/com.apple.Safari") })
+        })
         let safari = sources.first { $0.browser == .safari }
         #expect(safari?.roots.count == 2)
         #expect(safari?.roots.first == home.appending(path: "Library/Safari"))

@@ -88,6 +88,10 @@ struct MigrationImportContent: View {
                 }
                 Text(L10n.string("Passwords and sign-ins stay with your other browser.")).font(.caption).foregroundStyle(.secondary)
             }
+            if !store.isPrivate {
+                DefaultBrowserControl(compact: true)
+                    .disabled(flow.busy)
+            }
         }
         .task { if !store.isPrivate { flow.discover() } }
         .confirmationDialog(L10n.string("Replace this profile’s browsing data?"), isPresented: $confirming, titleVisibility: .visible) {

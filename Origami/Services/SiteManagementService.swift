@@ -19,14 +19,17 @@ extension PermissionService {
             try db.execute(sql: "DELETE FROM site_rules WHERE profile_id=? AND updated_at>=?", arguments: [profileID.uuidString, since.timeIntervalSince1970])
             try db.execute(sql: "DELETE FROM protocol_decisions WHERE profile_id=? AND updated_at>=?", arguments: [profileID.uuidString, since.timeIntervalSince1970])
         }
+        siteRulesChanged()
     }
     func siteRule(_ rule: String, origin: String, profileID: UUID) throws -> Bool {
+        _ = siteRulesRevision
         guard ["never_sleep", "muted"].contains(rule) else { throw RepositoryError.invalidInput }
         return try database.queue.read { try Bool.fetchOne($0, sql: "SELECT \(rule) FROM site_rules WHERE profile_id=? AND origin=?", arguments: [profileID.uuidString, origin]) ?? false }
     }
     func setSiteRule(_ rule: String, value: Bool, origin: String, profileID: UUID) throws {
         guard ["never_sleep", "muted"].contains(rule), URL(string: origin).flatMap(Self.origin) == origin else { throw RepositoryError.invalidInput }
         try database.queue.write { try $0.execute(sql: "INSERT INTO site_rules(profile_id,origin,\(rule),updated_at) VALUES (?,?,?,?) ON CONFLICT(profile_id,origin) DO UPDATE SET \(rule)=excluded.\(rule),updated_at=excluded.updated_at", arguments: [profileID.uuidString, origin, value, Date().timeIntervalSince1970]) }
+        siteRulesChanged()
     }
 }
 @MainActor

@@ -1,6 +1,159 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Default Browser" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default Browser"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认浏览器"
+          }
+        }
+      }
+    },
+    "Origami is your default browser" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Origami is your default browser"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Origami 是你的默认浏览器"
+          }
+        }
+      }
+    },
+    "Set as Default…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set as Default…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设为默认…"
+          }
+        }
+      }
+    },
+    "The default browser was not changed. You can try again or choose Origami in System Settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The default browser was not changed. You can try again or choose Origami in System Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认浏览器未更改。你可以重试，或在系统设置中选择 Origami。"
+          }
+        }
+      }
+    },
+    "Choose where to save the webpage folder. Open index.html inside it to view the saved page." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose where to save the webpage folder. Open index.html inside it to view the saved page."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择网页文件夹的存储位置。打开其中的 index.html 即可查看已存储的网页。"
+          }
+        }
+      }
+    },
+    "The page was saved, but some resources were unavailable. Parts of the saved page may be missing." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The page was saved, but some resources were unavailable. Parts of the saved page may be missing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页已存储，但部分资源不可用。已存储的网页可能缺少部分内容。"
+          }
+        }
+      }
+    },
+    "Print…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打印…"
+          }
+        }
+      }
+    },
+    "Save Page…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Page…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储网页…"
+          }
+        }
+      }
+    },
+    "The webpage could not be saved. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The webpage could not be saved. Please try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法存储网页。请重试。"
+          }
+        }
+      }
+    },
     "Preview unavailable. Open the file to view it." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13444,6 +13597,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缩放：%lld%% — 点按以重置"
+          }
+        }
+      }
+    },
+    "Open System Settings…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open System Settings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开系统设置…"
+          }
+        }
+      }
+    },
+    "In System Settings, choose Desktop & Dock → Default web browser → Origami." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In System Settings, choose Desktop & Dock → Default web browser → Origami."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系统设置中，选择“桌面与程序坞”→“默认网页浏览器”→ Origami。"
+          }
+        }
+      }
+    },
+    "Open System Settings from the Apple menu, then choose Desktop & Dock → Default web browser → Origami." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open System Settings from the Apple menu, then choose Desktop & Dock → Default web browser → Origami."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从苹果菜单打开系统设置，然后选择“桌面与程序坞”→“默认网页浏览器”→ Origami。"
           }
         }
       }

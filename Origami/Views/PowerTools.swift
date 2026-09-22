@@ -29,7 +29,6 @@ struct QuickTools: View {
                                 .accessibilityValue(manager.enabled ? "On" : "Off")
                         }
                         command("Find", "magnifyingglass") { close(); store.showingFind = true }
-                        command("Print", "printer") { page?.webView.printOperation(with: .shared).run() }
                         command("Save PDF…", "square.and.arrow.down") { savePDF() }
                     }.disabled(page?.nativePage != nil || page == nil)
                     section("RSS") {

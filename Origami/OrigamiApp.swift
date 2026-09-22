@@ -85,6 +85,17 @@ private struct BrowserCommands: Commands {
         if application.openWindow == nil { openWindow(id: "browser", value: store.session.windowID) }
         return store
     }
+    @CommandsBuilder private var pageFileCommands: some Commands {
+        CommandGroup(after: .saveItem) {
+            Button(L10n.string("Save Page…")) { store?.saveCurrentPage() }
+                .disabled(store?.canUsePageFileCommands != true)
+        }
+        CommandGroup(replacing: .printItem) {
+            Button(L10n.string("Print…")) { store?.printCurrentPage() }
+                .keyboardShortcut("p")
+                .disabled(store?.canUsePageFileCommands != true)
+        }
+    }
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button(L10n.string("Settings…")) { browser().openInternal(.settings) }.keyboardShortcut(",")
@@ -100,6 +111,7 @@ private struct BrowserCommands: Commands {
             Button(L10n.string("Close Tab")) { if let id = store?.session.selectedTabID { store?.close(id) } }.keyboardShortcut("w").disabled(store?.selectedTab == nil)
             Button(L10n.string("Close Window")) { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut("w", modifiers: [.command, .shift])
         }
+        pageFileCommands
         CommandMenu(L10n.string("View")) {
             Button(L10n.string("Zoom In")) { store?.visiblePage?.zoom(increasing: true) }
                 .keyboardShortcut("+")
@@ -163,7 +175,23 @@ private struct BrowserCommands: Commands {
 
 @MainActor
 final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate {
-    weak var application: BrowserApplicationContext?
+    weak var application: BrowserApplicationContext? {
+        didSet { Task { @MainActor in await Task.yield(); self.deliverPendingURLs() } }
+    }
+    private var pendingURLs: [URL] = []
+    func application(_ sender: NSApplication, open urls: [URL]) {
+        pendingURLs.append(contentsOf: urls.filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") })
+        deliverPendingURLs()
+    }
+    private func deliverPendingURLs() {
+        guard let application, !pendingURLs.isEmpty else { return }
+        let urls = pendingURLs; pendingURLs.removeAll()
+        let store: BrowserStore
+        if let active = application.activeStore, !active.isPrivate { store = active }
+        else { store = application.newWindow() }
+        for url in urls { store.newTab(url: url) }
+        application.openWindow?(store.session.windowID)
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         application?.globalControls?.stop()

@@ -28,6 +28,7 @@ final class BrowserStore {
     var peekPage: TabPage?
     var peekURL: URL?
     var peekMode: PeekMode = .onDemand
+    @ObservationIgnored var pagePrintSession: PagePrintSession?
     var persistenceError: String?
     var confirmationMessage: String?
     @ObservationIgnored var confirmationContinuation: CheckedContinuation<Bool, Never>?

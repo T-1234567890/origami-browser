@@ -9,7 +9,7 @@ struct BlockingSettings: View {
     @State private var domains = ""
     @State private var error: String?
     var body: some View {
-        Section {
+        Section("Blocking") {
             Toggle("Content Blocking", isOn: $service.contentEnabled)
             Button(L10n.string("Import Rules…")) { importing = true }
                 .help(L10n.string("Import a UTF-8 text file with one blocked domain per line."))

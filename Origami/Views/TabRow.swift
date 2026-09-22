@@ -87,7 +87,10 @@ struct TabRow: View {
 
             Button(tab.isSleeping == true ? "Wake Tab" : "Sleep Tab") { if tab.isSleeping == true { store.wake(tab.id) } else { Task { await store.sleep(tab.id) } } }
                 .disabled(tab.isPinned)
-            Button("Never Sleep This Site") { store.neverSleep(tab) }.disabled(tab.url?.host == nil)
+            Toggle("Never Sleep This Site", isOn: Binding(
+                get: { store.isNeverSleepEnabled(tab) },
+                set: { store.neverSleep(tab, enabled: $0) }
+            )).disabled(tab.url.flatMap(PermissionService.origin) == nil)
             Button("Bookmark Tab") { if let url = tab.url { do { _ = try store.services?.bookmarks.addUnique(url: url, title: tab.title, profileID: store.session.profileID); store.bookmarksChanged() } catch { store.persistenceError = error.localizedDescription } } }
             if !store.isPrivate, let app = store.application {
                 Menu("Move to Window") {

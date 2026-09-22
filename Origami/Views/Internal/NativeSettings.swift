@@ -97,6 +97,7 @@ struct NativeSettings: View {
                                 actionRow("Profiles", action: "Manage…") { model.open(InternalPage.profiles.url.absoluteString) }
                             }
                         }
+                        Section { DefaultBrowserControl() }
                         Section("Peek") {
                             Picker("Link previews", selection: Binding(get: { model.store.peekMode }, set: { model.store.setPeekMode($0) })) {
                                 ForEach(PeekMode.allCases) { Text($0.title).tag($0) }

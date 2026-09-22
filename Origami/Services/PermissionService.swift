@@ -1,9 +1,12 @@
 import Foundation
+import Observation
 import GRDB
 
 enum SitePermission: String, CaseIterable { case camera, microphone, location, notifications, popups, autoplay, downloads, clipboard, externalProtocol }
 enum PermissionDecision: String { case allow, ask, block }
-final class PermissionService {
+@Observable final class PermissionService {
+    private(set) var siteRulesRevision = 0
+    func siteRulesChanged() { siteRulesRevision &+= 1 }
     let database: DatabaseManager
     init(_ database: DatabaseManager) { self.database = database }
     static func origin(_ url: URL) -> String? {
@@ -35,5 +38,6 @@ final class PermissionService {
                 try db.execute(sql: "DELETE FROM site_rules WHERE profile_id=?", arguments: [profileID.uuidString])
             }
         }
+        siteRulesChanged()
     }
 }

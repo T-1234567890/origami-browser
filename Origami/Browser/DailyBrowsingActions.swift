@@ -66,9 +66,13 @@ extension BrowserStore {
         guard let index = session.tabs.firstIndex(where: { $0.id == id }) else { return }
         session.tabs[index].isSleeping = nil; save()
     }
-    func neverSleep(_ tab: BrowserTab) {
+    func isNeverSleepEnabled(_ tab: BrowserTab) -> Bool {
+        guard let url = tab.url, let origin = PermissionService.origin(url) else { return false }
+        return (try? services?.permissions.siteRule("never_sleep", origin: origin, profileID: session.profileID)) == true
+    }
+    func neverSleep(_ tab: BrowserTab, enabled: Bool = true) {
         guard let url = tab.url, let origin = PermissionService.origin(url) else { return }
-        do { try services?.permissions.setSiteRule("never_sleep", value: true, origin: origin, profileID: session.profileID) }
+        do { try services?.permissions.setSiteRule("never_sleep", value: enabled, origin: origin, profileID: session.profileID) }
         catch { persistenceError = error.localizedDescription }
     }
     func startLifecycleMonitoring() {

@@ -41,14 +41,12 @@ struct MigrationSource: Identifiable {
 }
 enum MigrationDiscovery {
     /// Injectable metadata probes keep tests independent of installed apps and personal data.
-    static func sources(home: URL, application: (String) -> URL?, exists: (URL) -> Bool) -> [MigrationSource] {
+    static func sources(home: URL, application: (String) -> URL?) -> [MigrationSource] {
         MigrationBrowser.allCases.compactMap { browser in
-            let app = application(browser.bundleID)
+            guard let app = application(browser.bundleID) else { return nil }
             let candidates = browser.dataLocations.map { home.appending(path: $0) }
-            let found = candidates.filter(exists)
-            guard app != nil || !found.isEmpty else { return nil }
             // An installed app may have a privacy-protected directory invisible to fileExists.
-            return MigrationSource(browser: browser, roots: app != nil ? candidates : found, applicationURL: app)
+            return MigrationSource(browser: browser, roots: candidates, applicationURL: app)
         }
     }
     /// Foundation's current-user home is redirected inside an App Sandbox container.
@@ -67,8 +65,11 @@ enum MigrationDiscovery {
     @MainActor static func installed() -> [MigrationSource] {
         guard let home = accountHome() else { return [] }
         return sources(home: home,
-                application: { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) },
-                exists: { FileManager.default.fileExists(atPath: $0.path) })
+                application: {
+                    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0),
+                          FileManager.default.fileExists(atPath: url.path) else { return nil }
+                    return url
+                })
     }
 }
 
