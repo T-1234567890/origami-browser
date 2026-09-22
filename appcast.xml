@@ -4,6 +4,15 @@
         <title>Origami</title>
         <item>
             <title>1.1.1</title>
+            <pubDate>Tue, 22 Sep 2026 13:28:26 +0000</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>16</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/T-1234567890/origami-browser/releases/download/v1.1.1-beta.5/Origami-1.1.1-beta.5.zip" length="11768097" type="application/octet-stream" sparkle:edSignature="2E3ul8Ow0if/wTdNDV3UYdltR197gB2m8p5YZwVsJ9ZxTM75Xdf2bwJHwN25k5SGnYmh+/Kuk8xqgzebh3KhAg=="/>
+        </item>
+        <item>
+            <title>1.1.1</title>
             <pubDate>Mon, 21 Sep 2026 14:17:53 +0000</pubDate>
             <sparkle:channel>beta</sparkle:channel>
             <sparkle:version>15</sparkle:version>
