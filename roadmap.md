@@ -4,7 +4,15 @@ Origami will continue focusing on native macOS browsing, useful built-in tools, 
 
 > This roadmap is directional, not a commitment. Features, scope, and target versions may change as Origami evolves.
 
-## v1.0.x — Ship & Polish
+Status key:
+
+- ✅ = Implemented
+- ~~Strikethrough~~ = Removed / deprioritized
+- Normal text = Planned
+
+When an entire version is complete, ✅ appears after its title instead of beside individual features. Crossed-out items remain crossed out.
+
+## v1.0.x — Ship & Polish ✅
 
 Focus on improving the existing browser rather than expanding scope.
 
@@ -16,7 +24,7 @@ Focus on improving the existing browser rather than expanding scope.
 - Compact Mode refinement
 - Release, update, and distribution pipeline polish
 
-## v1.1 — Better Browsing
+## v1.1 — Better Browsing ✅
 
 - Peek 2.0 with structured, non-AI previews
 - Content and ad blocking
@@ -34,16 +42,16 @@ Profiles should remain a single concept, with no separate Spaces system. They ma
 - ~~Local password manager~~
 - Passkeys & Keychain Integration
 - Translate
-- Dictionary
+- ~~Dictionary~~
 - Page Simplifier
 - Task Widget
 - Network / Connection tools
   - Public IP information
   - DNS lookup
-  - Certificate details
+  - ✅ Certificate information
   - Site network information
   - Connection diagnostics
-- Quick Weather
+- ~~Quick Weather~~
 
 The Task Widget should remain intentionally simple: a daily task list, free-form notes, a small monthly calendar, and the ability to add the current webpage as a task. It is not intended to become a project-management system.
 
