@@ -31,7 +31,8 @@ Profiles should remain a single concept, with no separate Spaces system. They ma
 
 ## v1.2 — Everyday Tools
 
-- Local password manager
+- ~~Local password manager~~
+- Passkeys & Keychain Integration
 - Translate
 - Dictionary
 - Page Simplifier
