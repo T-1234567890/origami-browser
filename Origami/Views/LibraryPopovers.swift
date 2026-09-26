@@ -152,8 +152,7 @@ private struct DownloadPopoverRow: View {
     }
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: item.state == .failed || item.state == .interrupted ? "exclamationmark.triangle" : "doc")
-                .font(.system(size: 20, weight: .light)).foregroundStyle(.secondary).frame(width: 26)
+            DownloadFileIcon(filename: item.filename, failed: item.state == .failed || item.state == .interrupted)
             VStack(alignment: .leading, spacing: 4) {
                 Button { if item.state == .completed { action("open") } } label: {
                     Text(item.filename.isEmpty ? "Download" : item.filename)

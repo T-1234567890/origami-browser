@@ -3,10 +3,19 @@ import WebKit
 @MainActor
 final class WebsiteDataService {
     private let ephemeralStore: WKWebsiteDataStore?
-    init(ephemeralStore: WKWebsiteDataStore? = nil) { self.ephemeralStore = ephemeralStore }
+    private let profiles: ProfileRepository?
+    init(ephemeralStore: WKWebsiteDataStore? = nil, profiles: ProfileRepository? = nil) {
+        self.ephemeralStore = ephemeralStore
+        self.profiles = profiles
+    }
     func store(for profile: BrowserProfile) -> WKWebsiteDataStore {
         if let ephemeralStore { return ephemeralStore }
-        if profile.sharing.website { return .default() }
+        if profile.sharing.website, let profiles, profile.id != profiles.defaultID,
+           var shared = try? profiles.list().first(where: { $0.id == profiles.defaultID }) {
+            shared.sharing.website = false
+            return store(for: shared)
+        }
+        if profile.sharing.website, profiles == nil { return .default() }
         if let id = profile.websiteStoreID { return WKWebsiteDataStore(forIdentifier: id) }
         return .default()
     }

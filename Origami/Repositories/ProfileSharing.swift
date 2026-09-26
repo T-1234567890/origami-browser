@@ -15,7 +15,7 @@ enum ProfileDataKind: String, CaseIterable, Identifiable {
     }
 }
 
-/// Personal is the stable, undeletable sharing destination. A profile's own
+/// The selected default is the sharing destination. A profile's own
 /// storage remains untouched when it opts into or out of sharing.
 struct ProfileSharing: Codable, Equatable {
     var website = false
@@ -47,16 +47,17 @@ struct ProfileSharing: Codable, Equatable {
 
 extension ProfileRepository {
     static func scope(_ id: UUID, _ kind: ProfileDataKind, in db: Database) throws -> UUID {
-        guard id != BrowserProfile.defaultID else { return id }
+        let defaultID = try Self.defaultID(in: db)
+        guard id != defaultID else { return id }
         guard let row = try Row.fetchOne(db, sql: "SELECT sharing FROM profiles WHERE id=?", arguments: [id.uuidString]) else { return id }
         let sharing = try (row["sharing"] as Data?).map { try JSONDecoder().decode(ProfileSharing.self, from: $0) } ?? ProfileSharing()
-        return sharing[kind] ? BrowserProfile.defaultID : id
+        return sharing[kind] ? defaultID : id
     }
     func scope(_ id: UUID, _ kind: ProfileDataKind) throws -> UUID {
         try database.queue.read { try Self.scope(id, kind, in: $0) }
     }
     func setSharing(_ sharing: ProfileSharing, for id: UUID) throws {
-        guard id != BrowserProfile.defaultID else { return }
+        guard id != defaultID else { return }
         let data = try JSONEncoder().encode(sharing)
         try database.queue.write { db in
             try db.execute(sql: "UPDATE profiles SET sharing=? WHERE id=?", arguments: [data, id.uuidString])

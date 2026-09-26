@@ -282,10 +282,12 @@ struct ContentView: View {
             .background(store.session.activeSplit == nil ? Color(nsColor: .textBackgroundColor) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: onboarding ? 0 : BrowserChromeMetrics.contentCornerRadius))
             .overlay(alignment: .topTrailing) {
-                if store.showingFind, let page = store.visiblePage, page.nativePage == nil {
+                if store.showingFind, let page = store.visiblePage, page.nativePage == nil, page.pdfContent == nil {
                     PageFindBar(page: page) { store.showingFind = false }.id(page.tabID).padding(12)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
             }
+            .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: store.showingFind)
             .overlay {
                 if !onboarding { FloatingMediaControl(store: store) }
             }
@@ -306,6 +308,8 @@ struct BrowserContentView: View {
                 if let destination = page.nativePage {
                     NativeInternalSurface(store: store, destination: destination, tabID: tab.id)
                         .id("\(tab.id)-\(destination.rawValue)-\(page.nativeRevision)")
+                } else if let pdf = page.pdfContent {
+                    PDFViewerView(content: pdf) { page.reload() }.id(ObjectIdentifier(pdf))
                 } else if page.readerVisible, let article = page.article {
                     ReaderView(article: article, url: page.currentURL, userAgent: page.webView.customUserAgent) { page.readerVisible = false }
                         .environment(\.openURL, OpenURLAction { url in

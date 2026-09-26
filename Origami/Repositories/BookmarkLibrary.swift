@@ -7,12 +7,15 @@ extension BookmarkRepository {
         return try database.queue.write { db in
             var count = 0
             func insert(_ items: [ImportedBookmark], parent: UUID?) throws {
-                var position = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM bookmarks WHERE profile_id=? AND folder_id IS ?", arguments: [profileID.uuidString, parent?.uuidString]) ?? 0
+                var position = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM (SELECT position FROM bookmarks WHERE profile_id=? AND folder_id IS ? UNION ALL SELECT position FROM bookmark_folders WHERE profile_id=? AND parent_id IS ?)", arguments: [profileID.uuidString, parent?.uuidString, profileID.uuidString, parent?.uuidString]) ?? 0
                 for item in items {
                     switch item {
                     case let .folder(title, children):
-                        let id = UUID()
-                        try db.execute(sql: "INSERT INTO bookmark_folders VALUES(?,?,?,?,?)", arguments: [id.uuidString, profileID.uuidString, parent?.uuidString, title, position])
+                        let existing = try String.fetchOne(db, sql: "SELECT id FROM bookmark_folders WHERE profile_id=? AND parent_id IS ? AND title=? ORDER BY position,id LIMIT 1", arguments: [profileID.uuidString, parent?.uuidString, title])
+                        let id = existing.flatMap(UUID.init(uuidString:)) ?? UUID()
+                        if existing == nil {
+                            try db.execute(sql: "INSERT INTO bookmark_folders VALUES(?,?,?,?,?)", arguments: [id.uuidString, profileID.uuidString, parent?.uuidString, title, position])
+                        }
                         try insert(children, parent: id)
                     case let .bookmark(title, url):
                         let existing = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM bookmarks WHERE profile_id=? AND folder_id IS ? AND url=?", arguments: [profileID.uuidString, parent?.uuidString, url.absoluteString]) ?? 0

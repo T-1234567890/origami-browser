@@ -36,6 +36,7 @@ import WebKit
         "document.querySelector('[type=password]').autocomplete='new-password'",
         "document.querySelector('form').method='get'",
         "document.querySelector('[type=password]').disabled=true",
+        "document.querySelector('[name=login]').autocomplete='one-time-code'",
         "document.querySelector('form').innerHTML='<input name=login><input type=password>'"
     ])
     func changedTargetsRejectCredentials(_ mutation: String) async throws {

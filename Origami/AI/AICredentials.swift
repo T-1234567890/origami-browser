@@ -5,36 +5,22 @@ import Observation
 
 struct AICredentialStore {
     var service = "dev.origami.ai.providers"
-    private func query(_ provider: AIProviderID) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-         kSecAttrAccount as String: provider.rawValue, kSecAttrSynchronizable as String: false]
-    }
+    private var keychain: KeychainStore { KeychainStore(service: service) }
     func read(_ provider: AIProviderID) throws -> String {
-        var q = query(provider); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess, let data = result as? Data, let text = String(data: data, encoding: .utf8), !text.isEmpty else { throw AIError.credential }
+        guard let data = try? keychain.read(provider.rawValue),
+              let text = String(data: data, encoding: .utf8), !text.isEmpty else { throw AIError.credential }
         return text
     }
-    func contains(_ provider: AIProviderID) -> Bool {
-        var q = query(provider); q[kSecReturnAttributes as String] = true
-        let context = LAContext(); context.interactionNotAllowed = true
-        q[kSecUseAuthenticationContext as String] = context
-        return SecItemCopyMatching(q as CFDictionary, nil) == errSecSuccess
-    }
+    func contains(_ provider: AIProviderID) -> Bool { (try? keychain.contains(provider.rawValue)) == true }
     func save(_ key: String, provider: AIProviderID) throws {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty, key.utf8.count < 8192, !key.contains("\n"), !key.contains("\r") else { throw AIError.credential }
-        let attributes: [String: Any] = [kSecValueData as String: Data(key.utf8)]
-        let result = SecItemUpdate(query(provider) as CFDictionary, attributes as CFDictionary)
-        if result == errSecItemNotFound {
-            var q = query(provider); q[kSecValueData as String] = Data(key.utf8)
-            q[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw AIError.credential }
-        } else if result != errSecSuccess { throw AIError.credential }
+        do { try keychain.save(Data(key.utf8), account: provider.rawValue) }
+        catch { throw AIError.credential }
     }
     func forget(_ provider: AIProviderID) throws {
-        let status = SecItemDelete(query(provider) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw AIError.credential }
+        do { try keychain.delete(provider.rawValue) }
+        catch { throw AIError.credential }
     }
 }
 @MainActor @Observable final class AISettings {

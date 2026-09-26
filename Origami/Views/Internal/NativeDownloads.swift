@@ -10,7 +10,7 @@ struct NativeDownloads: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Image(systemName: "doc").foregroundStyle(.secondary)
+                            DownloadFileIcon(filename: row.text("filename"), failed: ["failed", "interrupted"].contains(row.text("state")))
                             Text(row.text("filename")).lineLimit(1)
                             Spacer(); Text(row.text("state").capitalized).font(.caption).foregroundStyle(.secondary)
                         }

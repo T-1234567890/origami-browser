@@ -148,6 +148,13 @@ final class BrowserStore {
             guard let self else { return }
             self.newTab(url: request.url)
         }
+        page.imageDownloadMenu.openWindow = { [weak self] url, privately in
+            guard let self, let application = self.application else { return }
+            let destination = (privately || self.isPrivate)
+                ? application.newPrivateWindow(profileID: self.session.profileID)
+                : application.newWindow(profileID: self.session.profileID)
+            destination?.newTab(url: url)
+        }
         page.createPopup = { [weak self] configuration in
             guard let self else {
                 let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -207,7 +214,10 @@ final class BrowserStore {
     }
     func duplicate(_ id: UUID) {
         guard let tab = session.tabs.first(where: { $0.id == id }) else { return }
-        newTab(url: tab.url, groupID: tab.groupID)
+        if let pdf = pages[id]?.pdfContent, let copy = try? pdf.duplicate() {
+            let newID = newTab(groupID: tab.groupID)
+            page(for: newID).adoptPDFCopy(copy)
+        } else { newTab(url: tab.url, groupID: tab.groupID) }
     }
     func togglePin(_ id: UUID) {
         guard let index = session.tabs.firstIndex(where: { $0.id == id }) else { return }
@@ -380,7 +390,7 @@ final class BrowserStore {
     }
     func setRestoreSession(_ restore: Bool) { session.restoreSession = restore; preferences.restoreSession = restore; save() }
     func navigate(_ input: String, searchOnly: Bool = false) {
-        guard let url = searchOnly ? session.searchEngine.searchURL(for: input) : OmniboxRouter.destination(for: input, engine: session.searchEngine) else { return }
+        guard let url = searchOnly ? session.searchEngine.searchURL(for: input) : OmniboxRouter.destination(for: input, engine: session.searchEngine, httpsFirst: preferences.httpsFirst) else { return }
         guard let id = session.selectedTabID else {
             let id = newTab(url: url)
             _ = page(for: id)

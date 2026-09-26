@@ -37,7 +37,7 @@ struct NativeSettings: View {
     private var scopeLabel: String? {
         _ = model.store.application?.profileRevision
         guard let profile = try? model.store.services?.profiles.list().first(where: { $0.id == model.store.session.profileID }) else { return nil }
-        return SettingsScope.label(category: category.rawValue, profile: profile)
+        return SettingsScope.label(category: category.rawValue, profile: profile, defaultID: model.store.services?.profiles.defaultID ?? BrowserProfile.defaultID)
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -160,7 +160,7 @@ struct NativeSettings: View {
                             Toggle("HTTPS-First", isOn: Binding(get: { model.store.preferences.httpsFirst }, set: {
                                 model.store.preferences.httpsFirst = $0; model.store.preferencesRevision += 1
                             }))
-                            Text(L10n.string("Try an encrypted connection first. If HTTPS is unavailable, block the page until you choose to continue over HTTP. Disabling this does not bypass certificate errors.")).font(.callout).foregroundStyle(.secondary)
+                            Text(L10n.string("Try an encrypted connection first. If HTTPS is unavailable, automatically fall back to HTTP. HTTP connections are marked as insecure. Certificate validation remains enabled.")).font(.callout).foregroundStyle(.secondary)
                         }
                         if let blocking = model.store.services?.blocking { BlockingSettings(service: blocking) }
                         Section("Website Data & Permissions") {
@@ -236,6 +236,11 @@ struct NativeProfiles: View {
     @State private var sharing = ProfileSharing()
     @State private var showEditor = false
     @State private var deleting: BrowserProfile?
+    @State private var makingDefault: BrowserProfile?
+    private var defaultID: UUID {
+        _ = model.store.application?.profileRevision
+        return model.store.services?.profiles.defaultID ?? BrowserProfile.defaultID
+    }
     @State private var busy = false
     var body: some View {
         InternalContent(title: "Profiles") {
@@ -244,16 +249,20 @@ struct NativeProfiles: View {
                 HStack(spacing: 12) {
                     Circle().fill(profile.color.tint).frame(width: 12, height: 12)
                     Text(profile.name)
+                    if profile.id == defaultID { Text(L10n.string("Default")).font(.caption).foregroundStyle(.secondary) }
                     if profile.id == model.store.session.profileID { Text("Current").font(.caption).foregroundStyle(.secondary) }
                     Spacer()
                     if profile.id != model.store.session.profileID {
                         Button("Switch") { perform { _ = try model.store.application?.switchProfile(profile.id, in: model.store) } }
                     }
+                    if profile.id != defaultID {
+                        Button(L10n.string("Make Default")) { makingDefault = profile }
+                    }
                     Button("Edit…") { editing = profile.id; name = profile.name; color = profile.color; sharing = profile.sharing; showEditor = true }
                     Button { deleting = profile } label: { Image(systemName: "trash") }
                         .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Delete " + profile.name)
-                        .disabled(profile.id == BrowserProfile.defaultID)
-                        .help(profile.id == BrowserProfile.defaultID ? L10n.string("The default profile cannot be deleted.") : "Delete profile")
+                        .disabled(profile.id == defaultID)
+                        .help(profile.id == defaultID ? L10n.string("The default profile cannot be deleted.") : "Delete profile")
                 }.padding(.vertical, 6)
                 Divider()
             }
@@ -274,7 +283,7 @@ struct NativeProfiles: View {
                             .accessibilityAddTraits(color == option ? .isSelected : [])
                     }
                 }
-                if editing != BrowserProfile.defaultID {
+                if editing != defaultID {
                     Text("Share with default profile").font(.subheadline.weight(.semibold))
                     ForEach(ProfileDataKind.allCases) { kind in
                         Toggle(kind.title, isOn: Binding(get: { sharing[kind] }, set: { sharing[kind] = $0 }))
@@ -303,6 +312,19 @@ struct NativeProfiles: View {
                 }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }.padding(20).frame(width: 420)
         }
+        .confirmationDialog(L10n.string("Change Default Profile?"), isPresented: Binding(get: { makingDefault != nil }, set: { if !$0 { makingDefault = nil } }), titleVisibility: .visible) {
+            Button(L10n.string("Make Default")) {
+                guard let profile = makingDefault else { return }
+                makingDefault = nil
+                perform {
+                    try model.store.application?.setDefaultProfile(profile.id)
+                    refresh()
+                }
+            }
+            Button("Cancel", role: .cancel) { makingDefault = nil }
+        } message: {
+            Text(L10n.string("Shared categories will use the new default profile’s data. Affected webpages reload; save unfinished forms first. Each profile’s own data and tabs are kept."))
+        }
         .alert("Delete Profile?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("Cancel", role: .cancel) { deleting = nil }
             Button("Delete", role: .destructive) {
@@ -315,7 +337,7 @@ struct NativeProfiles: View {
                 }
             }
         } message: {
-            Text(L10n.string("This closes this profile’s windows and deletes its own website data, history, bookmarks, permissions, and saved tabs. Shared Personal data and downloaded files remain."))
+            Text(L10n.string("This closes this profile’s windows and deletes its own website data, history, bookmarks, permissions, and saved tabs. Shared data and downloaded files remain."))
         }
     }
     private func refresh() { perform { profiles = try model.store.services?.profiles.list() ?? [] } }

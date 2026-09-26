@@ -23,10 +23,15 @@ final class DownloadService: NSObject, WKDownloadDelegate, NSOpenSavePanelDelega
     private let repository: DownloadRepository
     @ObservationIgnored private var transfers: [ObjectIdentifier: Transfer] = [:] {
         didSet {
+            let previous = Set(oldValue.values.filter { $0.record.state == .running }.map { $0.record.id })
+            for transfer in transfers.values where transfer.record.state == .running && !previous.contains(transfer.record.id) {
+                startsByProfile[transfer.record.profileID, default: 0] += 1
+            }
             let profiles = Set(transfers.values.filter { $0.record.state == .running }.map { $0.record.profileID })
             if profiles != runningProfiles { runningProfiles = profiles }
         }
     }
+    private(set) var startsByProfile: [UUID: Int] = [:]
     private(set) var runningProfiles: Set<UUID> = []
     @ObservationIgnored private var retryRequests: [UUID: (profile: UUID, request: URLRequest)] = [:]
     @ObservationIgnored private var retryOrder: [UUID] = []
@@ -222,6 +227,26 @@ final class DownloadService: NSObject, WKDownloadDelegate, NSOpenSavePanelDelega
         } catch {
             record.state = .failed
             record.error = DownloadQuarantine.Failure.verificationFailed.localizedDescription
+        }
+    }
+    /// Register an explicit save of already-loaded content without downloading it again.
+    /// The caller holds the save panel's security scope until this method returns.
+    func recordSavedFile(at url: URL, sourceURL: URL?, profileID: UUID, tabID: UUID?) {
+        do {
+            try DownloadQuarantine.enforce(at: url, downloadURL: sourceURL, originURL: nil)
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            var record = DownloadRecord(profileID: profileID, tabID: tabID,
+                                        url: DownloadQuarantine.metadataURL(sourceURL)?.absoluteString ?? "")
+            record.filename = url.lastPathComponent
+            record.destination = url.path
+            record.bookmark = try url.bookmarkData(options: .withSecurityScope)
+            record.state = .completed
+            record.received = size; record.expected = size
+            try repository.save(record)
+            startsByProfile[profileID, default: 0] += 1
+        } catch {
+            onError?("Download metadata could not be saved: \(error.localizedDescription)")
         }
     }
     private func persist(_ record: DownloadRecord) {

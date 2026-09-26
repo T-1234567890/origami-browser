@@ -25,14 +25,10 @@ struct BrowserLibraryControls: View {
                 .help("Bookmarks").accessibilityLabel("Bookmarks")
                 .popover(isPresented: $bookmarksVisible) { BookmarksPopover(store: store) }
             Button { downloadsVisible.toggle() } label: {
-                Group {
-                    if store.services?.downloads.runningProfiles.contains(store.session.profileID) == true && !reduceMotion {
-                        Image(systemName: InternalPage.downloads.symbol)
-                            .symbolEffect(.bounce.down.byLayer, options: .repeating.speed(0.5), isActive: true)
-                    } else {
-                        Image(systemName: InternalPage.downloads.symbol)
-                    }
-                }.frame(width: 24, height: 24).contentShape(Rectangle())
+                DownloadActivityIcon(
+                    running: store.services?.downloads.runningProfiles.contains(store.session.profileID) == true,
+                    starts: store.services?.downloads.startsByProfile[store.session.profileID] ?? 0
+                )
             }
                 .help("Downloads").accessibilityLabel("Downloads")
                 .popover(isPresented: $downloadsVisible) { DownloadsPopover(store: store) }

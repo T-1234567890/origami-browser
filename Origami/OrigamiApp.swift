@@ -8,6 +8,14 @@ struct OrigamiApp: App {
     init() {
         let isolated = ProcessInfo.processInfo.arguments.contains("--ui-testing") || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         _application = State(initialValue: BrowserApplicationContext(isolated: isolated))
+        #if DEBUG
+        if !isolated {
+            let credentials = BrowserCredentialCoordinator.shared
+            credentials.refresh()
+            // Capability and permission only; never inspect credential contents.
+            print("[Origami Passkeys] signedCapability=\(credentials.capabilities.passkeys) permission=\(credentials.state)")
+        }
+        #endif
     }
     var body: some Scene {
         WindowGroup("Origami", id: "browser", for: UUID.self) { id in
@@ -93,7 +101,7 @@ private struct BrowserCommands: Commands {
         CommandGroup(replacing: .printItem) {
             Button(L10n.string("Print…")) { store?.printCurrentPage() }
                 .keyboardShortcut("p")
-                .disabled(store?.canUsePageFileCommands != true)
+                .disabled(store?.canPrintPage != true)
         }
     }
     var body: some Commands {
@@ -151,10 +159,14 @@ private struct BrowserCommands: Commands {
                 .disabled(store?.visiblePage == nil || store?.visiblePage?.nativePage != nil)
         }
         CommandGroup(after: .textEditing) {
-            Button(L10n.string("Find on Page…")) { store?.showingFind = true }.keyboardShortcut("f")
+            Button(L10n.string("Find on Page…")) { if let pdf = store?.visiblePage?.pdfContent { pdf.searchVisible.toggle() } else { store?.showingFind.toggle() } }.keyboardShortcut("f")
                 .disabled(store?.visiblePage == nil || store?.visiblePage?.nativePage != nil)
         }
         CommandMenu(L10n.string("Browse")) {
+            Button(L10n.string("Enable Passkeys…")) {
+                BrowserCredentialCoordinator.shared.requestPasskeyAccess()
+            }.disabled(BrowserCredentialCoordinator.shared.requesting)
+            Divider()
             Button(L10n.string("Close Peek")) { store?.dismissPeek() }.keyboardShortcut(.escape, modifiers: []).disabled(store?.peekPage == nil)
             Button(L10n.string("Reader Mode")) { store?.visiblePage?.readerVisible.toggle() }.disabled(store?.visiblePage?.article == nil)
             Button(L10n.string("JSON Reader")) { store?.visiblePage?.readerVisible = false; store?.visiblePage?.showsJSON = true }.disabled(store?.visiblePage?.jsonText == nil)
@@ -175,6 +187,9 @@ private struct BrowserCommands: Commands {
 
 @MainActor
 final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidBecomeActive(_ notification: Notification) {
+        BrowserCredentialCoordinator.shared.refresh()
+    }
     weak var application: BrowserApplicationContext? {
         didSet { Task { @MainActor in await Task.yield(); self.deliverPendingURLs() } }
     }

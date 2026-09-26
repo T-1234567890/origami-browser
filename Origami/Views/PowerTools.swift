@@ -28,7 +28,7 @@ struct QuickTools: View {
                                 .foregroundStyle(manager.enabled ? appearance.accent : Color.primary)
                                 .accessibilityValue(manager.enabled ? "On" : "Off")
                         }
-                        command("Find", "magnifyingglass") { close(); store.showingFind = true }
+                        command("Find", "magnifyingglass") { close(); if let pdf = page?.pdfContent { pdf.searchVisible = true } else { store.showingFind = true } }
                         command("Save PDF…", "square.and.arrow.down") { savePDF() }
                     }.disabled(page?.nativePage != nil || page == nil)
                     section("RSS") {
@@ -73,6 +73,7 @@ struct QuickTools: View {
     }
     private func savePDF() {
         guard let page else { return }
+        if let pdf = page.pdfContent { pdf.save(); return }
         let panel = NSSavePanel(); panel.allowedContentTypes = [.pdf]; panel.nameFieldStringValue = "Page.pdf"
         panel.begin { result in
             guard result == .OK, let url = panel.url else { return }
@@ -160,35 +161,104 @@ struct ScriptEditor: View {
     }
 }
 
-struct PageFindBar: View {
-    let page: TabPage
+/// A fresh field is mounted each time Find opens; select only its own editor.
+struct FindQueryField: NSViewRepresentable {
+    let title: String
+    @Binding var text: String
+    let submit: () -> Void
     let close: () -> Void
-    @State private var query = ""
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeNSView(context: Context) -> FindTextField {
+        let field = FindTextField()
+        field.isBordered = false; field.drawsBackground = false
+        field.focusRingType = .none
+        field.placeholderString = L10n.string(title)
+        field.setAccessibilityLabel(L10n.string(title))
+        field.font = .systemFont(ofSize: 13)
+        field.stringValue = text; field.delegate = context.coordinator
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return field
+    }
+    func updateNSView(_ field: FindTextField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text { field.stringValue = text }
+    }
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: FindQueryField
+        init(_ parent: FindQueryField) { self.parent = parent }
+        func controlTextDidChange(_ notification: Notification) {
+            if let field = notification.object as? NSTextField { parent.text = field.stringValue }
+        }
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            if selector == #selector(NSResponder.insertNewline(_:)) { parent.submit(); return true }
+            if selector == #selector(NSResponder.cancelOperation(_:)) { parent.close(); return true }
+            return false
+        }
+    }
+}
+final class FindTextField: NSTextField {
+    private var selectedOnOpen = false
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, !selectedOnOpen else { return }
+        selectedOnOpen = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            window.makeFirstResponder(self)
+            self.selectText(nil)
+        }
+    }
+}
+
+struct PageFindBar: View {
+    @Environment(\.profileAppearance) private var appearance
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Bindable var page: TabPage
+    let close: () -> Void
     @State private var missing = false
-    @FocusState private var focused: Bool
+    private var query: String { page.findQuery }
     var body: some View {
-        HStack(spacing: 8) {
-            TextField("Find on page", text: $query).textFieldStyle(.plain).focused($focused)
-                .onSubmit { search(backward: false) }.onExitCommand(perform: close)
-            if missing { Text("No matches").font(.caption).foregroundStyle(.secondary) }
-            Button { search(backward: true) } label: { Image(systemName: "chevron.up") }.help("Previous match").disabled(query.isEmpty)
-            Button { search(backward: false) } label: { Image(systemName: "chevron.down") }.help("Next match").disabled(query.isEmpty)
-            Button(action: close) { Image(systemName: "xmark") }.help("Close Find")
-        }.buttonStyle(.plain).padding(12).frame(width: 340)
-            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10)).shadow(radius: 4)
-            .onAppear { focused = true }
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary).padding(.leading, 4).accessibilityHidden(true)
+            FindQueryField(title: "Find on page", text: $page.findQuery,
+                           submit: { search(backward: false) }, close: close)
+                .frame(minWidth: 60, maxWidth: .infinity).frame(height: 22)
+            if missing { Text("No matches").font(.caption).foregroundStyle(.secondary).fixedSize() }
+            Divider().frame(height: 16).padding(.horizontal, 2)
+            control("Previous match", "chevron.up") { search(backward: true) }.disabled(query.isEmpty || missing)
+            control("Next match", "chevron.down") { search(backward: false) }.disabled(query.isEmpty || missing)
+            control("Close Find", "xmark", action: close)
+        }
+            .font(.system(size: 13)).foregroundStyle(.primary).tint(.primary)
+            .buttonStyle(.plain).padding(.horizontal, 8).padding(.vertical, 6).frame(width: 310)
+            .background { background }
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5).allowsHitTesting(false))
+            .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
             .task(id: query) {
-                guard !query.isEmpty else { missing = false; return }
                 do {
-                    try await Task.sleep(for: .milliseconds(100))
-                    let result = try await page.webView.find(query, configuration: WKFindConfiguration())
-                    if !Task.isCancelled { missing = !result.matchFound }
+                    guard !Task.isCancelled else { return }
+                    let count = try await WebPageFind.update(page.webView, query: query)
+                    if !Task.isCancelled { missing = !query.isEmpty && count == 0 }
                 } catch { }
             }
+            .onDisappear { Task { _ = try? await WebPageFind.update(page.webView, query: "") } }
+    }
+    @ViewBuilder private var background: some View {
+        if reduceTransparency { Capsule().fill(Color(nsColor: .windowBackgroundColor)) }
+        else if #available(macOS 26, *), appearance.glass != "Reduced" {
+            Color.clear.glassEffect(.regular, in: .capsule)
+        } else { Capsule().fill(.regularMaterial) }
+    }
+    private func control(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).frame(width: 26, height: 26).contentShape(Circle())
+        }.help(L10n.string(title)).accessibilityLabel(L10n.string(title))
     }
     private func search(backward: Bool) {
         guard !query.isEmpty else { return }
-        let config = WKFindConfiguration(); config.backwards = backward; config.wraps = true
-        Task { if let result = try? await page.webView.find(query, configuration: config) { missing = !result.matchFound } }
+        Task {
+            if let count = try? await WebPageFind.update(page.webView, query: query, step: backward ? -1 : 1) { missing = count == 0 }
+        }
     }
 }

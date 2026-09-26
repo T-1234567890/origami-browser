@@ -3,13 +3,13 @@ import WebKit
 @testable import Origami
 
 @MainActor struct ConnectionSecurityTests {
-    @Test func defaultPolicyRequiresUserConsentAndSettingPersists() throws {
+    @Test func defaultPolicyFallsBackAutomaticallyAndSettingPersists() throws {
         let name = "Origami.SecurityFixture." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = BrowserPreferences(defaults: defaults)
         #expect(preferences.httpsFirst)
-        #expect(HTTPSFirst.policy(enabled: true) == .userMediatedFallbackToHTTP)
+        #expect(HTTPSFirst.policy(enabled: true) == .automaticFallbackToHTTP)
         preferences.httpsFirst = false
         #expect(!BrowserPreferences(defaults: defaults).httpsFirst)
         #expect(HTTPSFirst.policy(enabled: false) == .keepAsRequested)
@@ -18,14 +18,24 @@ import WebKit
         let preferences = BrowserPreferences()
         let services = try BrowserServices(database: DatabaseManager(), preferences: preferences)
         let page = TabPage(services: services); defer { page.dispose() }
-        #expect(page.webView.configuration.defaultWebpagePreferences.preferredHTTPSNavigationPolicy == .userMediatedFallbackToHTTP)
+        #expect(page.webView.configuration.defaultWebpagePreferences.preferredHTTPSNavigationPolicy == .automaticFallbackToHTTP)
         let navigation = WKWebpagePreferences()
         for enabled in [true, false, true] {
             preferences.httpsFirst = enabled
             page.applyConnectionPolicy(to: navigation)
             #expect(navigation.preferredHTTPSNavigationPolicy == HTTPSFirst.policy(enabled: enabled))
-            #expect(navigation.preferredHTTPSNavigationPolicy != .automaticFallbackToHTTP)
         }
+    }
+    @Test(arguments: ["example.com/path?q=test#section", "localhost:8080", "127.0.0.1:3000", "[::1]:8080"])
+    func bareAddressesAllowNativeUpgradeAndFallback(_ address: String) {
+        #expect(OmniboxRouter.destination(for: address, engine: .google, httpsFirst: true)?.absoluteString == "http://" + address)
+        #expect(OmniboxRouter.destination(for: address, engine: .google, httpsFirst: false)?.absoluteString == "https://" + address)
+    }
+    @Test func explicitSchemesAndSearchesArePreserved() {
+        for address in ["https://example.com/path", "http://example.com/path"] {
+            #expect(OmniboxRouter.destination(for: address, engine: .google, httpsFirst: true)?.absoluteString == address)
+        }
+        #expect(OmniboxRouter.destination(for: "browser search", engine: .google, httpsFirst: true) == SearchEngine.google.searchURL(for: "browser search"))
     }
     @Test func privatePagesUseTheSameProtection() throws {
         let preferences = BrowserPreferences(), database = try DatabaseManager()
@@ -34,7 +44,7 @@ import WebKit
         let page = TabPage(services: services, profileID: profile.id); defer { page.dispose() }
         #expect(!page.webView.configuration.websiteDataStore.isPersistent)
         let navigation = WKWebpagePreferences(); page.applyConnectionPolicy(to: navigation)
-        #expect(navigation.preferredHTTPSNavigationPolicy == .userMediatedFallbackToHTTP)
+        #expect(navigation.preferredHTTPSNavigationPolicy == .automaticFallbackToHTTP)
     }
     @Test(.timeLimit(.minutes(1)), arguments: ["http", "https"])
     func actualWebViewDoesNotInferCertificateTrustFromURL(scheme: String) async throws {

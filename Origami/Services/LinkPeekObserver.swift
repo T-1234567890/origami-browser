@@ -34,13 +34,28 @@ import WebKit
         return false
     }
     static let world = WKContentWorld.world(name: "Origami.LinkHover")
+    // A favicon/thumbnail inside a titled link is not an image-gallery interaction.
+    static let isGalleryLinkSource = """
+    (link) => {
+      if (!link) return false;
+      const pageURL = new URL(location.href);
+      if (pageURL.searchParams.get('tbm') === 'isch' || pageURL.searchParams.get('udm') === '2') return true;
+      if (link.closest('[aria-roledescription=carousel],[aria-roledescription=slide]')) return true;
+      const hasImage = !!link.querySelector('img,picture');
+      return hasImage && (!link.textContent.trim() || !!link.closest('[role=dialog]'));
+    }
+    """
     static let source = """
     (() => {
       let timer, activeLink = null, lastPreview = 0;
       const send = value => window.webkit.messageHandlers.origamiLinkHover.postMessage(value);
+      const isGalleryLink = \(isGalleryLinkSource);
       document.addEventListener('pointerover', event => {
         if (!event.isTrusted || event.pointerType !== 'mouse') return;
         const link = event.target.closest?.('a[href]');
+        if (isGalleryLink(link)) {
+          clearTimeout(timer); activeLink = null; send({}); return;
+        }
         if (link === activeLink) return;
         activeLink = link; clearTimeout(timer); send({});
         if (!link || !/^https?:/.test(link.href) || link.hasAttribute('download')) return;
@@ -48,7 +63,8 @@ import WebKit
         if (/(pagination|pager|social|share|footer|breadcrumb)/i.test(String(link.className)+' '+link.id+' '+String(link.parentElement?.className))) return;
         if (/^(next|previous|prev|back|more|sign in|log in|\\d+)$/i.test(link.textContent.trim()) || /next|prev/.test(link.rel)) return;
         const target = new URL(link.href);
-        if (/\\.(zip|gz|tar|dmg|pkg|exe|msi|csv|txt|json|xml|rss|atom|png|jpe?g|gif|webp|svg|avif|ico|mp[34]|mov|webm|wav|ogg|woff2?|ttf)$/i.test(target.pathname) || /^(image|audio|video)\\//i.test(link.type)) return;
+        // File eligibility belongs to canPreview(_:), including native document/image previews.
+        if (/^(audio|video)\\//i.test(link.type)) return;
         if (target.searchParams.has('imgurl') || target.pathname === '/imgres') return;
         if (target.origin === location.origin && (target.pathname === location.pathname || target.searchParams.has('page') || target.searchParams.has('start'))) return;
         if (/(^|\\.)(facebook\\.com|instagram\\.com|twitter\\.com|x\\.com|tiktok\\.com|linkedin\\.com|whatsapp\\.com|t\\.me)$/.test(target.hostname)) return;

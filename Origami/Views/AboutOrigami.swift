@@ -137,8 +137,8 @@ struct OrigamiCreditsView: View {
 /// Only appearance and tab layout are profile-scoped settings; all other
 /// settings pages currently change shared preferences.
 enum SettingsScope {
-    static func label(category: String, profile: BrowserProfile) -> String? {
-        guard profile.id != BrowserProfile.defaultID else { return nil }
+    static func label(category: String, profile: BrowserProfile, defaultID: UUID = BrowserProfile.defaultID) -> String? {
+        guard profile.id != defaultID else { return nil }
         let kind: ProfileDataKind? = category == "Appearance" ? .appearance : category == "Tabs" ? .layout : nil
         return kind.map { profile.sharing[$0] ? L10n.string("Synchronized with default profile") : profile.name } ?? L10n.string("Synchronized with default profile")
     }

@@ -31,8 +31,8 @@ enum MigrationWriter {
                 guard try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM profiles WHERE id=?)", arguments: [profileID.uuidString]) == true else { throw MigrationFailure.invalid }
                 // A replacement must never overwrite a shared category through another profile.
                 let sharing = try Data.fetchOne(db, sql: "SELECT sharing FROM profiles WHERE id=?", arguments: [profileID.uuidString]).flatMap { try? JSONDecoder().decode(ProfileSharing.self, from: $0) } ?? ProfileSharing()
-                if profileID != BrowserProfile.defaultID && ((selection.bookmarks && source.bookmarks != nil && sharing.bookmarks) || (selection.history && source.history != nil && sharing.history)) { throw MigrationFailure.sharedDestination }
-                if profileID == BrowserProfile.defaultID {
+                if profileID != (try ProfileRepository.defaultID(in: db)) && ((selection.bookmarks && source.bookmarks != nil && sharing.bookmarks) || (selection.history && source.history != nil && sharing.history)) { throw MigrationFailure.sharedDestination }
+                if profileID == (try ProfileRepository.defaultID(in: db)) {
                     for data in try Data.fetchAll(db, sql: "SELECT sharing FROM profiles WHERE id<>? AND sharing IS NOT NULL", arguments: [profileID.uuidString]) {
                         let sharing = try JSONDecoder().decode(ProfileSharing.self, from: data)
                         if (selection.bookmarks && source.bookmarks != nil && sharing.bookmarks) || (selection.history && source.history != nil && sharing.history) { throw MigrationFailure.sharedDestination }
@@ -45,15 +45,23 @@ enum MigrationWriter {
                 var count = 0
                 func insert(_ items: [MigrationBookmark], parent: UUID?, depth: Int) throws {
                     guard depth < 32 else { throw MigrationFailure.tooLarge }
-                    for (position, item) in items.enumerated() {
+                    let start = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM (SELECT position FROM bookmarks WHERE profile_id=? AND folder_id IS ? UNION ALL SELECT position FROM bookmark_folders WHERE profile_id=? AND parent_id IS ?)", arguments: [profileID.uuidString, parent?.uuidString, profileID.uuidString, parent?.uuidString]) ?? 0
+                    for (offset, item) in items.enumerated() {
+                        let position = start + offset
                         count += 1; guard count <= 100000 else { throw MigrationFailure.tooLarge }
                         let id = UUID()
                         if let url = item.url {
                             guard MigrationInput.url(url.absoluteString) != nil else { throw MigrationFailure.invalid }
+                            let exists = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM bookmarks WHERE profile_id=? AND folder_id IS ? AND url=?)", arguments: [profileID.uuidString, parent?.uuidString, url.absoluteString]) ?? false
+                            if exists { continue }
                             try db.execute(sql: "INSERT INTO bookmarks(id,profile_id,folder_id,title,url,position,created_at) VALUES (?,?,?,?,?,?,?)", arguments: [id.uuidString, profileID.uuidString, parent?.uuidString, item.title, url.absoluteString, position, Date().timeIntervalSince1970])
                         } else {
-                            try db.execute(sql: "INSERT INTO bookmark_folders VALUES (?,?,?,?,?)", arguments: [id.uuidString, profileID.uuidString, parent?.uuidString, item.title, position])
-                            try insert(item.children, parent: id, depth: depth + 1)
+                            let existing = try String.fetchOne(db, sql: "SELECT id FROM bookmark_folders WHERE profile_id=? AND parent_id IS ? AND title=? ORDER BY position,id LIMIT 1", arguments: [profileID.uuidString, parent?.uuidString, item.title])
+                            let folderID = existing.flatMap(UUID.init(uuidString:)) ?? id
+                            if existing == nil {
+                                try db.execute(sql: "INSERT INTO bookmark_folders VALUES (?,?,?,?,?)", arguments: [folderID.uuidString, profileID.uuidString, parent?.uuidString, item.title, position])
+                            }
+                            try insert(item.children, parent: folderID, depth: depth + 1)
                         }
                     }
                 }

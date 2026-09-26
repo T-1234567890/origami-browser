@@ -1,8 +1,34 @@
 import Testing
 import WebKit
+import CoreGraphics
 @testable import Origami
 
 @MainActor struct ReleaseDownloadTests {
+    @Test(.timeLimit(.minutes(1))) func imageSaveActionUsesDownloadManager() async throws {
+        let services = try BrowserServices(database: DatabaseManager())
+        let page = TabPage(services: services)
+        defer { page.dispose() }
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        services.downloads.destinationSelector = { _ in folder.appending(path: "image.png") }
+        page.webView.loadHTMLString("<title>Image fixture</title>", baseURL: URL(string: "https://example.invalid"))
+        for _ in 0..<100 {
+            if page.webView.title == "Image fixture" && !page.webView.isLoading { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let encoded = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII="
+        page.downloadImage(try #require(URL(string: "data:image/png;base64," + encoded)))
+        for _ in 0..<300 {
+            if let record = try services.downloadRepository.list(profileID: BrowserProfile.defaultID).first,
+               [.completed, .failed, .cancelled].contains(record.state) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let record = try #require(services.downloadRepository.list(profileID: BrowserProfile.defaultID).first)
+        #expect(record.state == .completed)
+        #expect(try Data(contentsOf: folder.appending(path: "image.png")) == Data(base64Encoded: encoded))
+    }
+
     @Test(.timeLimit(.minutes(1))) func detachedWebViewDownloadsCompleteAndPersist() async throws {
         let db = try DatabaseManager()
         _ = try ProfileRepository(db).ensureDefault()

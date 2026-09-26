@@ -19,8 +19,7 @@ final class SessionStore {
     }
     func load() throws -> BrowserSession {
         let repository = SessionRepository(try database)
-        let profiles = try ProfileRepository(database).list()
-        let profileID = profiles.contains(where: { $0.id == preferences.currentProfileID }) ? preferences.currentProfileID : BrowserProfile.defaultID
+        let profileID = try ProfileRepository(database).defaultID
         var session = try repository.load(profileID: profileID)
         if session == nil, let legacyURL, FileManager.default.fileExists(atPath: legacyURL.path) {
             var imported = try JSONDecoder().decode(BrowserSession.self, from: Data(contentsOf: legacyURL))

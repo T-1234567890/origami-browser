@@ -79,6 +79,54 @@ The only write permission is `contents: write` on release/recovery jobs. Checkou
 
 ## Release procedure and failure recovery
 
+### Passkey Release artifact validation
+
+The temporary vanilla WKWebView A/B harness has been removed. Normal WebAuthn
+remains owned by WebKit. Existing capability/authorization logs are Debug-only;
+Release does not query or log website credentials.
+
+For the next signing-environment comparison, use **v1.1.1-beta.6** (remote tags
+checked on 2026-09-26; highest was v1.1.1-beta.5). Recheck availability before
+tagging. Cloud generates marketing version **1.1.1**, **Beta 6**, and its own
+monotonically increasing build number. Do not edit local development defaults
+or reuse a published tag. Creating/pushing the tag starts the existing release
+workflow and can publish the release; do so only when intentionally ready.
+
+1. Commit the intended release changes, including new source files and the
+   approved passkey entitlement. Resolve any failing required tests first.
+2. Use the existing Xcode Cloud Release/Developer ID/notarization workflow.
+   Download the resulting signed artifact; do not substitute a local build,
+   re-sign it, or modify its bundle.
+3. Quit development copies. Install and launch the downloaded artifact itself.
+   Confirm About shows **1.1.1 Beta 6** and the expected Cloud build number.
+4. Verify the installed artifact, substituting its actual path:
+
+   ```sh
+   codesign --verify --strict --verbose=2 "/path/to/Origami.app"
+   codesign -dv --verbose=4 "/path/to/Origami.app"
+   codesign -d --entitlements :- "/path/to/Origami.app"
+   ```
+
+   Confirm Developer ID Application signing, the expected team/bundle identity,
+   and `com.apple.developer.web-browser.public-key-credential = true`. A valid
+   local development signature does not establish the Cloud artifact's state.
+5. Check Origami's access in **System Settings → Privacy & Security → Passkeys
+   Access for Web Browsers**, if present. Do not reset permissions for this test.
+   Release has no authorization-state logger; the setting is a manual check,
+   not a new in-process authorization measurement.
+6. Test GitHub, Google, and X/Twitter passkey sign-in, then WebAuthn.io registration
+   with a disposable test account and authentication. Record each site's result,
+   whether the native Passwords/Touch ID sheet appeared, and any exception name
+   and message. Do not include accounts, credential IDs, or authentication payloads
+   in logs. Record macOS version, Cloud build number, and test time.
+
+If Release works while local Development fails, development signing/provisioning
+or local environment differences become candidates. If both fail, investigate
+WebKit/AuthenticationServices, entitlement backend, and system-level conditions.
+Neither outcome alone proves a specific root cause; do not introduce workarounds
+based on it. Safari success is a comparison, not proof that third-party browser
+authorization is healthy.
+
 Run the regular app tests/build and `python3 -m unittest discover -s scripts/release/tests -v`. Review the changes and release identity. Create and push one supported tag only when intentionally ready to release; this document does not execute that action.
 
 Authentication, Cloud failure/timeout, artifact verification and Sparkle failure abort before publishing anything. Upload failure leaves a draft, which no updater consumes. Inspect the failed run and remove **only its incomplete draft** before re-running that tag's failed release job; this starts a fresh Cloud build with a higher build number. Never move a published tag or replace a published binary. A timed-out or ambiguous Cloud start may still be running: inspect/cancel it in Cloud before restarting.

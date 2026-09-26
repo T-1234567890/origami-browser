@@ -1,0 +1,2 @@
+// Compatibility alias; passkey capability is now included in the normal app entitlements.
+CODE_SIGN_ENTITLEMENTS = Configuration/Origami.entitlements

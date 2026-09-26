@@ -7,13 +7,8 @@ enum TitleImageLoader {
     enum Failure: Error { case invalid, oversized }
     static let maximumBytes = 4_000_000
     static func read(_ url: URL) throws -> Data {
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        let data = try handle.read(upToCount: maximumBytes + 1) ?? Data()
-        guard data.count <= maximumBytes else { throw Failure.oversized }
-        return data
+        do { return try SelectedImageFile.read(url, maximumBytes: maximumBytes) }
+        catch SelectedImageFile.Failure.oversized { throw Failure.oversized }
     }
     @MainActor static func normalized(_ data: Data) throws -> Data {
         guard !data.isEmpty, data.count <= maximumBytes else { throw Failure.oversized }

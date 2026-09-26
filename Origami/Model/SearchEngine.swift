@@ -27,7 +27,7 @@ enum SearchEngine: String, Codable, CaseIterable, Identifiable {
 }
 
 enum OmniboxRouter {
-    static func destination(for input: String, engine: SearchEngine) -> URL? {
+    static func destination(for input: String, engine: SearchEngine, httpsFirst: Bool = false) -> URL? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         if let url = URL(string: text), InternalRoute.page(for: url) != nil { return url }
@@ -36,6 +36,12 @@ enum OmniboxRouter {
         if !text.contains(where: \.isWhitespace), !text.contains("@"), !text.contains("://"),
            let url = URL(string: "https://" + text), let host = url.host,
            host == "localhost" || host.contains(".") || host.contains(":") {
+            // Preserve an HTTP starting point for WebKit's HTTPS-first upgrade:
+            // synthesizing explicit HTTPS here would prevent native HTTP fallback.
+            if httpsFirst, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                parts.scheme = "http"
+                return parts.url
+            }
             return url
         }
         return engine.searchURL(for: text)

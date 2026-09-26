@@ -34,7 +34,7 @@ final class BrowserServices {
         power = PowerRepository(database)
         feeds = FeedService(database: database)
         isPrivate = privateProfile != nil
-        websiteData = WebsiteDataService(ephemeralStore: privateProfile == nil ? nil : .nonPersistent())
+        websiteData = WebsiteDataService(ephemeralStore: privateProfile == nil ? nil : .nonPersistent(), profiles: ProfileRepository(database))
         profiles = ProfileRepository(database)
         _ = try profiles.ensureDefault()
         if var privateProfile, privateProfile.id != BrowserProfile.defaultID {

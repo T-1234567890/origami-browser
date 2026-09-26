@@ -1,7 +1,7 @@
 import GRDB
 
 enum Migrations {
-    static let names = ["v1_profiles", "v2_sessions", "v3_history", "v4_bookmarks", "v5_downloads", "v6_permissions", "v7_daily_browsing", "v8_site_rule_timestamps", "v9_group_appearance", "v10_profile_identity", "v11_split_view", "v12_feeds", "v13_power_tools", "v14_ai_search_events", "v15_remove_citation_generator", "v16_web_highlights", "v17_profile_sharing"]
+    static let names = ["v1_profiles", "v2_sessions", "v3_history", "v4_bookmarks", "v5_downloads", "v6_permissions", "v7_daily_browsing", "v8_site_rule_timestamps", "v9_group_appearance", "v10_profile_identity", "v11_split_view", "v12_feeds", "v13_power_tools", "v14_ai_search_events", "v15_remove_citation_generator", "v16_web_highlights", "v17_profile_sharing", "v18_default_profile"]
     static func make() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration(names[0]) { db in
@@ -131,6 +131,11 @@ enum Migrations {
         }
         migrator.registerMigration(names[16]) { db in
             try db.execute(sql: "ALTER TABLE profiles ADD COLUMN sharing BLOB")
+        }
+        migrator.registerMigration(names[17]) { db in
+            try db.execute(sql: "ALTER TABLE profiles ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0")
+            try db.execute(sql: "UPDATE profiles SET is_default=1 WHERE id='00000000-0000-0000-0000-000000000001'")
+            try db.execute(sql: "CREATE UNIQUE INDEX one_default_profile ON profiles(is_default) WHERE is_default=1")
         }
         return migrator
     }

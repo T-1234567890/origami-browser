@@ -41,7 +41,7 @@ extension BrowserStore {
             for store in application.map({ Array($0.stores.values) }) ?? [self] { store.preferencesRevision += 1 }
             return true
         case "navigation.open":
-            guard let input = params["input"] as? String, let url = OmniboxRouter.destination(for: input, engine: session.searchEngine),
+            guard let input = params["input"] as? String, let url = OmniboxRouter.destination(for: input, engine: session.searchEngine, httpsFirst: preferences.httpsFirst),
                   ["http", "https"].contains(url.scheme), let index = session.tabs.firstIndex(where: { $0.id == tabID }) else { throw RepositoryError.invalidInput }
             // Defer navigation until the current content action has returned.
             Task { @MainActor [weak self] in

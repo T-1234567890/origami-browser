@@ -4,6 +4,7 @@ import GRDB
 enum ProfileColor: String, CaseIterable { case mint, purple, pink, orange, green, blue }
 
 struct BrowserProfile: Identifiable, Equatable {
+    // Legacy Personal identity and preference-storage key; use profiles.defaultID for the selected default.
     static let defaultID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     let id: UUID
     var name: String
@@ -16,8 +17,25 @@ struct BrowserProfile: Identifiable, Equatable {
 final class ProfileRepository {
     let database: DatabaseManager
     init(_ database: DatabaseManager) { self.database = database }
+    var defaultID: UUID { (try? database.queue.read { try Self.defaultID(in: $0) }) ?? BrowserProfile.defaultID }
+    static func defaultID(in db: Database) throws -> UUID {
+        guard try db.columns(in: "profiles").contains(where: { $0.name == "is_default" }) else { return BrowserProfile.defaultID }
+        return try String.fetchOne(db, sql: "SELECT id FROM profiles WHERE is_default=1").flatMap(UUID.init(uuidString:)) ?? BrowserProfile.defaultID
+    }
+    func setDefault(_ id: UUID) throws {
+        try database.queue.write { db in
+            guard try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM profiles WHERE id=?)", arguments: [id.uuidString]) == true else { throw RepositoryError.wrongProfile }
+            let old = try Self.defaultID(in: db)
+            // The former default keeps its own data instead of inheriting the new default.
+            var own = ProfileSharing()
+            for kind in ProfileDataKind.allCases { own[kind] = false }
+            try db.execute(sql: "UPDATE profiles SET sharing=? WHERE id=? OR id=?", arguments: [try JSONEncoder().encode(own), old.uuidString, id.uuidString])
+            try db.execute(sql: "UPDATE profiles SET is_default=0 WHERE is_default=1")
+            try db.execute(sql: "UPDATE profiles SET is_default=1 WHERE id=?", arguments: [id.uuidString])
+        }
+    }
     func ensureDefault() throws -> BrowserProfile {
-        if let profile = try list().first(where: { $0.id == BrowserProfile.defaultID }) { return profile }
+        if let profile = try list().first(where: { $0.id == defaultID }) { return profile }
         return try insert(BrowserProfile(id: BrowserProfile.defaultID, name: "Personal", createdAt: Date(), websiteStoreID: nil))
     }
     func create(name: String, color: ProfileColor = .mint, sharing: ProfileSharing = ProfileSharing()) throws -> BrowserProfile {
@@ -49,8 +67,8 @@ final class ProfileRepository {
         }
     }
     func delete(_ id: UUID) throws {
-        guard id != BrowserProfile.defaultID else { throw RepositoryError.invalidInput }
         try database.queue.write { db in
+            guard id != (try Self.defaultID(in: db)) else { throw RepositoryError.invalidInput }
             try db.execute(sql: "DELETE FROM browser_sessions WHERE profile_id=?", arguments: [id.uuidString])
             try db.execute(sql: "DELETE FROM profiles WHERE id=?", arguments: [id.uuidString])
         }

@@ -1,15 +1,21 @@
 import AppKit
+import PDFKit
 import UniformTypeIdentifiers
 import WebKit
 
 extension BrowserStore {
+    var canPrintPage: Bool {
+        if let pdf = visiblePage?.pdfContent { return pdf.document?.allowsPrinting == true && !pdf.locked }
+        return canUsePageFileCommands
+    }
     var canUsePageFileCommands: Bool {
-        guard let page = visiblePage, page.nativePage == nil, page.errorMessage == nil, !page.isLoading,
+        guard let page = visiblePage, page.nativePage == nil, page.pdfContent == nil, page.errorMessage == nil, !page.isLoading,
               let scheme = page.webView.url?.scheme?.lowercased() else { return false }
         return ["http", "https", "file"].contains(scheme)
     }
 
     func printCurrentPage() {
+        if let pdf = visiblePage?.pdfContent { pdf.printDocument(); return }
         guard canUsePageFileCommands, let page = visiblePage else { return }
         guard let window = page.webView.window, window.attachedSheet == nil,
               pagePrintSession == nil else { return }

@@ -61,7 +61,7 @@ final class BrowserApplicationContext {
         let id = id ?? initialID
         if let store = stores[id] { return store }
         var session = BrowserSession(); session.windowID = id
-        session.profileID = persistence?.preferences.currentProfileID ?? BrowserProfile.defaultID
+        session.profileID = defaultProfileID
         return install(session)
     }
     private func install(_ session: BrowserSession) -> BrowserStore {
@@ -81,7 +81,7 @@ final class BrowserApplicationContext {
     }
     @discardableResult func newWindow(profileID: UUID? = nil) -> BrowserStore {
         var session = BrowserSession()
-        session.profileID = profileID ?? activeStore?.session.profileID ?? BrowserProfile.defaultID
+        session.profileID = profileID ?? activeStore?.session.profileID ?? defaultProfileID
         let store = install(session)
         openWindow?(session.windowID)
         return store
@@ -89,7 +89,7 @@ final class BrowserApplicationContext {
     @discardableResult func newPrivateWindow(profileID: UUID? = nil) -> BrowserStore? {
         do {
             guard let services else { throw RepositoryError.invalidInput }
-            let id = profileID ?? activeStore?.session.profileID ?? BrowserProfile.defaultID
+            let id = profileID ?? activeStore?.session.profileID ?? defaultProfileID
             guard let profile = try services.profiles.list().first(where: { $0.id == id }) else { throw RepositoryError.wrongProfile }
             let preferences = persistence?.preferences ?? activeStore?.preferences ?? BrowserPreferences()
             let privateServices = try BrowserServices(database: DatabaseManager(), preferences: preferences,
@@ -163,9 +163,35 @@ final class BrowserApplicationContext {
         return replacement
     }
 
+    var defaultProfileID: UUID { services?.profiles.defaultID ?? BrowserProfile.defaultID }
+
+    func setDefaultProfile(_ id: UUID) throws {
+        guard let services else { throw RepositoryError.invalidInput }
+        guard id != services.profiles.defaultID else { return }
+        let previousScopes = try Dictionary(uniqueKeysWithValues: stores.values.filter { !$0.isPrivate }.map {
+            ($0.session.windowID, try services.profiles.scope($0.session.profileID, .website))
+        })
+        try services.profiles.setDefault(id)
+        persistence?.preferences.currentProfileID = id
+        profileRevision += 1
+        for store in stores.values where !store.isPrivate {
+            if previousScopes[store.session.windowID] != (try services.profiles.scope(store.session.profileID, .website)) {
+                store.dismissPeek()
+                store.resolveConfirmation(false)
+                store.pages.values.forEach { $0.dispose() }
+                store.pages.removeAll()
+            }
+            store.bookmarksChanged()
+            store.applyProfileLayout()
+            store.preferencesRevision += 1
+            // Keep current windows in their profiles; changing default never moves tabs.
+        }
+        NotificationCenter.default.post(name: .origamiHistoryChanged, object: nil)
+    }
+
     func updateProfile(_ id: UUID, name: String, color: ProfileColor, sharing: ProfileSharing) throws {
         guard let services, let previous = try services.profiles.list().first(where: { $0.id == id }) else { throw RepositoryError.wrongProfile }
-        try services.profiles.update(id, name: name, color: color, sharing: id == BrowserProfile.defaultID ? nil : sharing)
+        try services.profiles.update(id, name: name, color: color, sharing: id == defaultProfileID ? nil : sharing)
         profileRevision += 1
         for store in stores.values where !store.isPrivate && store.session.profileID == id {
             if previous.sharing.website != sharing.website {
@@ -184,7 +210,7 @@ final class BrowserApplicationContext {
     }
 
     func deleteProfile(_ id: UUID) async throws {
-        guard id != BrowserProfile.defaultID, let services,
+        guard id != defaultProfileID, let services,
               let profile = try services.profiles.list().first(where: { $0.id == id }) else { throw RepositoryError.invalidInput }
         let affected = stores.values.filter { $0.session.profileID == id }
         for store in affected {
@@ -199,10 +225,10 @@ final class BrowserApplicationContext {
         try services.profiles.delete(id)
         persistence?.preferences.removeProfilePreferences(id)
         profileRevision += 1
-        if persistence?.preferences.currentProfileID == id { persistence?.preferences.currentProfileID = BrowserProfile.defaultID }
+        if persistence?.preferences.currentProfileID == id { persistence?.preferences.currentProfileID = defaultProfileID }
         // Deleting an unrelated profile must not change the user's current context.
         // Only provide a replacement when deletion closed every browser window.
-        if stores.isEmpty { _ = try switchProfile(BrowserProfile.defaultID) }
+        if stores.isEmpty { _ = try switchProfile(defaultProfileID) }
     }
 
     func close(_ id: UUID) {

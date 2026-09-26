@@ -6,6 +6,38 @@ import UniformTypeIdentifiers
 @testable import Origami
 
 @MainActor struct PeekPreviewTests {
+    @Test func searchResultIconsDoNotSuppressPeek() async throws {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let web = WKWebView(frame: .zero, configuration: configuration)
+        defer { web.stopLoading() }
+        web.loadHTMLString("""
+        <title>Peek link fixture</title>
+        <a id="result" href="https://example.invalid/article"><span><img alt="Site icon"></span><h3>Search result title</h3></a>
+        <a id="plain" href="https://example.invalid/other">Normal text link</a>
+        <a id="image" href="https://example.invalid/photo"><picture><img alt="Photo"></picture></a>
+        <div role="dialog"><a id="gallery" href="https://example.invalid/photo"><img>Gallery photo</a></div>
+        <div aria-roledescription="carousel"><a id="slide" href="https://example.invalid/slide">Next slide</a></div>
+        <a id="file" href="https://example.invalid/report.txt">Download report</a>
+        """, baseURL: URL(string: "https://www.google.com/search?q=fixture"))
+        for _ in 0..<100 {
+            if web.title == "Peek link fixture" && !web.isLoading { break }
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        let values = try await web.callAsyncJavaScript("""
+            // Also compile the complete injected observer, catching script syntax regressions.
+            new Function(observer);
+            const isGallery = (0, eval)('(' + predicate + ')');
+            const result = ['result', 'plain', 'image', 'gallery', 'slide', 'file']
+                .map(id => isGallery(document.getElementById(id)));
+            history.replaceState({}, '', '/search?udm=2&q=fixture');
+            result.push(isGallery(document.getElementById('result')));
+            return result;
+            """, arguments: ["observer": LinkPeekObserver.source, "predicate": LinkPeekObserver.isGalleryLinkSource],
+            in: nil, contentWorld: .defaultClient) as? [Bool]
+        #expect(values == [false, false, true, true, true, false, true])
+    }
+
     @Test func contentTypesHaveCapitalizedLabelsAndIcons() {
         var preview = PeekPreview(url: URL(string: "https://example.invalid")!)
         preview.category = "article"

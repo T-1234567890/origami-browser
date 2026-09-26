@@ -47,11 +47,19 @@ struct SiteInformation: View {
 
             if let page, origin != nil {
                 Divider()
-                Label(L10n.string(page.connectionSecurity.rawValue), systemImage: page.connectionSecurity.symbol)
-                    .foregroundStyle(page.connectionSecurity.warning ? Color.red : Color.primary)
+                HStack(spacing: 6) {
+                    Label(L10n.string(page.connectionSecurity.rawValue), systemImage: page.connectionSecurity.symbol)
+                        .foregroundStyle(page.connectionSecurity.warning ? Color.red : Color.primary)
+                    if page.canViewCertificate {
+                        Button { page.viewCertificate() } label: {
+                            Image(systemName: "doc.text.magnifyingglass")
+                        }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                        .help("View Certificate…").accessibilityLabel("View Certificate…")
+                    }
+                }
                 Text(page.connectionSecurity == .secure ? "Certificate validated by WebKit. Encryption does not establish that this website is trustworthy." : page.connectionSecurity == .insecure ? "This connection is not encrypted and has no TLS certificate. Others may read or change data in transit." : page.connectionSecurity == .mixed ? "The HTTPS certificate was accepted, but some page content is not secure." : "No validated connection is available for this navigation.")
                     .font(.caption).foregroundStyle(.secondary)
-                if page.canViewCertificate { Button("View Certificate…") { page.viewCertificate() } }
             }
             if let origin {
                 Divider()

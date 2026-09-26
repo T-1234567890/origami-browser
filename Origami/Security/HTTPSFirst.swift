@@ -1,10 +1,10 @@
 import WebKit
 
-/// WebKit performs upgrades, redirects and the warning/explicit HTTP fallback.
-/// Never use automaticFallbackToHTTP: failed upgrades require user consent.
+/// WebKit owns HTTPS upgrades and HTTP fallback, including redirects and request
+/// handling. Do not implement fallback by replaying failed requests ourselves.
 enum HTTPSFirst {
     static func policy(enabled: Bool) -> WKWebpagePreferences.UpgradeToHTTPSPolicy {
-        enabled ? .userMediatedFallbackToHTTP : .keepAsRequested
+        enabled ? .automaticFallbackToHTTP : .keepAsRequested
     }
 }
 

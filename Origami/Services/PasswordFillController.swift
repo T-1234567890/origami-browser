@@ -17,7 +17,7 @@ import Observation
     @ObservationIgnored private var anchor: NSWindow?
 
     func install(on webView: WKWebView) {
-        guard BrowserFeatureFlags.passwordAutoFill else { return }
+        guard BrowserCredentialCoordinator.supportsWebsitePasswordRequests, BrowserFeatureFlags.passwordAutoFill else { return }
         self.webView = webView
         let content = webView.configuration.userContentController
         content.add(self, contentWorld: PasswordFillScript.world, name: "origamiPasswordFocus")
@@ -39,7 +39,7 @@ import Observation
     }
 
     func refresh() {
-        guard BrowserFeatureFlags.passwordAutoFill, let webView, allowed?() == true else { return }
+        guard BrowserCredentialCoordinator.supportsWebsitePasswordRequests, BrowserFeatureFlags.passwordAutoFill, let webView, allowed?() == true else { return }
         Task { _ = try? await webView.callAsyncJavaScript("window.__origamiPasswordFill?.refresh();", arguments: [:], in: nil, contentWorld: PasswordFillScript.world) }
     }
 
@@ -61,7 +61,7 @@ import Observation
 
     /// Only called from the native key button, never from a webpage message.
     func request() {
-        guard BrowserFeatureFlags.passwordAutoFill, !busy, available, token != nil, allowed?() == true,
+        guard BrowserCredentialCoordinator.supportsWebsitePasswordRequests, BrowserFeatureFlags.passwordAutoFill, !busy, available, token != nil, allowed?() == true,
               let webView, webView.url == url, let window = webView.window, window.isKeyWindow else { return }
         message = nil; busy = true; anchor = window
         let request = ASAuthorizationPasswordProvider().createRequest()

@@ -8,12 +8,14 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     @ObservationIgnored let linkPeekObserver = LinkPeekObserver()
     let highlighter = WebHighlighterController()
     let passwordFill = PasswordFillController()
+    @ObservationIgnored let imageDownloadMenu = ImageDownloadMenu()
     let webView: WKWebView
     var destinationHistory = TabDestinationHistory()
     var nativeRevision = 0
     var aiTitle: String?
     var answerFromHistory = false
     var isAsking = Personalization.shared.defaultAsk
+    var findQuery = ""
     var newTabDraft = ""
     var askModelSelections: [AIProviderID: String] = [:]
     var article: ReaderArticle?
@@ -25,6 +27,19 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     var showsJSON = true
     var discoveredFeeds: [URL] = []
     var responseDetails: ResponseDetails?
+    var pdfContent: PDFTabContent?
+    @ObservationIgnored private var pdfHistory: [UUID: PDFTabContent] = [:]
+    @ObservationIgnored private var pendingPDF: PDFTabContent?
+    @ObservationIgnored private var pendingPDFResponse: WKNavigationResponse?
+    @ObservationIgnored private var mainRequestMethod = "GET"
+    private func leavePDF() {
+        pendingPDF?.dispose(); pendingPDF = nil; pendingPDFResponse = nil
+        pdfContent = nil
+    }
+    private func prunePDFHistory() {
+        let ids = Set(destinationHistory.entries.map(\.id))
+        for id in Array(pdfHistory.keys) where !ids.contains(id) { pdfHistory.removeValue(forKey: id)?.dispose() }
+    }
     var documentGeneration = UUID()
     var navigationStarted: Date?
     @ObservationIgnored var documentTask: Task<Void, Never>?
@@ -42,11 +57,13 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private(set) var zoomLevel = 1.0
     var canZoom: Bool { nativePage == nil && !readerVisible && !(showsJSON && jsonText != nil) }
     func zoom(increasing: Bool) {
+        if let pdfContent { pdfContent.zoom(increasing); return }
         guard canZoom else { return }
         zoomLevel = PageZoom.step(from: zoomLevel, increasing: increasing)
         webView.pageZoom = zoomLevel
     }
     func resetZoom() {
+        if let pdfContent { pdfContent.fitPage(); return }
         zoomLevel = 1
         webView.pageZoom = 1
     }
@@ -80,10 +97,11 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     var errorMessage: String?
     var favicon: NSImage?
     @ObservationIgnored private var requestedURL: URL?
-    var currentURL: URL? { nativePage?.url ?? requestedURL ?? webView.url }
+    var currentURL: URL? { nativePage?.url ?? pdfContent?.sourceURL ?? requestedURL ?? webView.url }
     var pageTitle: String? {
         if nativePage == .newtab, let aiTitle { return aiTitle }
         if let nativePage { return nativePage.title }
+        if let pdfContent { return pdfContent.filename }
         if requestedURL != nil { return currentURL?.host }
         return webView.title.flatMap { $0.isEmpty ? nil : $0 }
     }
@@ -111,6 +129,10 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         configuration.preferences.isElementFullscreenEnabled = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
+        imageDownloadMenu.allowed = { [weak self] source in self?.downloadAllowed(source: source) == true }
+        imageDownloadMenu.save = { [weak self] url in self?.downloadImage(url) }
+        imageDownloadMenu.open = { [weak self] url in self?.openTab?(URLRequest(url: url)) }
+        imageDownloadMenu.install(on: webView)
         configuration.userContentController.add(linkPeekObserver, contentWorld: LinkPeekObserver.world, name: "origamiLinkHover")
         configuration.userContentController.addUserScript(WKUserScript(source: LinkPeekObserver.source, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: LinkPeekObserver.world))
         highlighter.allowed = { [weak self] in self?.isPassivePreview == false && self?.nativePage == nil && self?.readerVisible == false }
@@ -191,24 +213,25 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
     private func update() {
         connectionRevision += 1
-        let suspend = nativePage != nil
+        let suspend = nativePage != nil || pdfContent != nil
         webView.isInspectable = !suspend
         if mediaPlaybackSuspended != suspend {
             mediaPlaybackSuspended = suspend
             webView.setAllMediaPlaybackSuspended(suspend, completionHandler: nil)
             refreshMediaState()
         }
-        if nativePage == nil && !webView.isLoading && (requestedURL == nil || requestedURL == webView.url) {
+        if nativePage == nil && pdfContent == nil && pendingPDF == nil && !webView.isLoading && (requestedURL == nil || requestedURL == webView.url) {
             recordWebNavigation()
             if requestedURL == webView.url { requestedURL = nil }
         }
-        isLoading = nativePage == nil && webView.isLoading
-        progress = nativePage == nil ? webView.estimatedProgress : 0
+        isLoading = pdfContent?.loading ?? (nativePage == nil && webView.isLoading)
+        progress = pdfContent != nil ? 0 : (nativePage == nil ? webView.estimatedProgress : 0)
         canGoBack = destinationHistory.canGoBack
         canGoForward = destinationHistory.canGoForward
         onChange?()
     }
     private func recordWebNavigation() {
+        guard pdfContent == nil, pendingPDF == nil else { return }
         guard let item = webView.backForwardList.currentItem, let url = webView.url, item.url == url else { return }
         if let pendingEntry {
             destinationHistory.select(pendingEntry, url: url)
@@ -223,11 +246,14 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         let ids = Set(destinationHistory.entries.map(\.id))
         webHistoryItems = webHistoryItems.filter { ids.contains($0.key) }
+        prunePDFHistory()
     }
     func load(_ url: URL) {
+        leavePDF()
         securityCommitted = false
         errorMessage = nil; dismissDialog()
         let entry = destinationHistory.visit(url)
+        prunePDFHistory()
         requestedURL = url
         if InternalRoute.page(for: url) != nil {
             pendingEntry = nil; faviconTask?.cancel(); faviconLoading = false; webView.stopLoading(); favicon = nil; update()
@@ -240,8 +266,12 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func traverse(_ direction: Int) {
         guard let entry = destinationHistory.move(direction) else { return }
         securityCommitted = false
+        leavePDF()
         resetDocuments()
         errorMessage = nil; dismissDialog(); requestedURL = entry.url
+        if let pdf = pdfHistory[entry.id] {
+            pdfContent = pdf; pendingEntry = nil; webView.stopLoading(); update(); return
+        }
         if InternalRoute.page(for: entry.url) != nil {
             pendingEntry = nil; webView.stopLoading(); update(); return
         }
@@ -258,6 +288,15 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     func reload(withoutCache: Bool = false) {
         errorMessage = nil
         if nativePage != nil { nativeRevision += 1; return }
+        if let pdfContent {
+            guard !pdfContent.requiresResubmission else {
+                pdfContent.error = L10n.string("To reload this PDF, return to the source page and submit it again.")
+                return
+            }
+            requestedURL = pdfContent.sourceURL
+            if let id = destinationHistory.current?.id { pdfHistory.removeValue(forKey: id)?.dispose() }
+            leavePDF()
+        }
         pendingEntry = destinationHistory.current?.id
         if let requestedURL { webView.load(URLRequest(url: requestedURL, cachePolicy: withoutCache ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy)) }
         else { Self.reloadWebView(webView, withoutCache: withoutCache) }
@@ -270,6 +309,9 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         documentTask?.cancel(); documentGeneration = UUID(); article = nil; readerVisible = false; jsonText = nil; discoveredFeeds = []; responseDetails = nil; navigationStarted = Date()
     }
     func dispose() {
+        leavePDF()
+        pdfHistory.values.forEach { $0.dispose() }; pdfHistory.removeAll()
+        imageDownloadMenu.dispose()
         passwordFill.dispose()
         highlighter.dispose()
         documentTask?.cancel()
@@ -288,6 +330,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         onChange = nil; openTab = nil; createPopup = nil
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        leavePDF()
         passwordFill.reset()
         securityCommitted = false
         resetDocuments()
@@ -314,7 +357,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         update()
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard nativePage == nil else { return }
+        guard nativePage == nil, pdfContent == nil, pendingPDF == nil else { return }
         errorMessage = nil
         update()
         passwordFill.refresh()
@@ -345,7 +388,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         update()
     }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        guard nativePage == nil else { return }
+        guard nativePage == nil, pdfContent == nil else { return }
         errorMessage = L10n.string("This page stopped responding. Reload to continue.")
         update()
     }
@@ -363,6 +406,10 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
+        // The old web document did not commit the PDF download; it must not navigate
+        // the native PDF tab via a delayed script. Browser actions leave PDF mode first.
+        guard pdfContent == nil else { decisionHandler(.cancel); return }
+        if navigationAction.targetFrame?.isMainFrame == true { mainRequestMethod = navigationAction.request.httpMethod ?? "GET" }
         let scheme = url.scheme?.lowercased() ?? ""
         // Native destinations are entered through browser actions, never remote JavaScript.
         if scheme == "origami" || nativePage != nil { decisionHandler(.cancel); return }
@@ -376,6 +423,7 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 decisionHandler(.cancel)
             } else {
                 if navigationAction.targetFrame?.isMainFrame == true {
+                    leavePDF()
                     resetDocuments()
                     requestedURL = url
                     update()
@@ -405,6 +453,19 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             }
         }
     }
+    func downloadImage(_ url: URL) { downloadResource(url) }
+
+    private func downloadResource(_ url: URL) {
+        guard ImageDownloadMenu.imageURL(url.absoluteString) != nil,
+              downloadAllowed(source: webView.url), let services else { return }
+        let profileID = profileID, tabID = tabID, source = webView
+        // WebKit preserves the page's network context, including blob/data URLs.
+        // Set the delegate in the completion callback before download events proceed.
+        source.startDownload(using: URLRequest(url: url)) { download in
+            services.downloads.accept(download, profileID: profileID, tabID: tabID, sourceWebView: source)
+        }
+    }
+
     private func downloadAllowed(source: URL?) -> Bool {
         guard !isPassivePreview else { previewUnavailable?(); return false }
         guard let services else { return false }
@@ -420,6 +481,12 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             decisionHandler(.cancel); previewUnavailable?(); return
         }
         let attachment = (navigationResponse.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") == true
+        if !attachment, navigationResponse.isForMainFrame, PDFTabContent.isPDF(navigationResponse.response) {
+            let content = PDFTabContent(response: navigationResponse.response, isPrivate: services?.isPrivate == true)
+            content.requiresResubmission = !["GET", "HEAD"].contains(mainRequestMethod.uppercased())
+            pendingPDF = content; pendingPDFResponse = navigationResponse
+            decisionHandler(.download); return
+        }
         if attachment || !navigationResponse.canShowMIMEType {
             decisionHandler(downloadAllowed(source: webView.url) ? .download : .cancel)
         } else { decisionHandler(.allow) }
@@ -428,7 +495,46 @@ final class TabPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         services?.downloads.accept(download, profileID: profileID, tabID: tabID, sourceWebView: webView)
     }
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        if let content = pendingPDF, navigationResponse === pendingPDFResponse {
+            pendingPDF = nil; pendingPDFResponse = nil
+            let id: UUID
+            if let pendingEntry { id = pendingEntry; destinationHistory.select(id, url: content.sourceURL) }
+            else { id = destinationHistory.visit(content.sourceURL).id }
+            pendingEntry = nil
+            pdfHistory.removeValue(forKey: id)?.dispose()
+            pdfHistory[id] = content; pdfContent = content; requestedURL = content.sourceURL
+            prunePDFHistory()
+            configurePDF(content)
+            content.accept(download); update(); return
+        }
+        let attachment = (navigationResponse.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") == true
+        if navigationResponse.isForMainFrame, !attachment, PDFTabContent.isPDF(navigationResponse.response) {
+            // The tab navigated away while WebKit was converting the response.
+            download.cancel { _ in }; return
+        }
         services?.downloads.accept(download, profileID: profileID, tabID: tabID, sourceWebView: webView)
+    }
+    func adoptPDFCopy(_ content: PDFTabContent) {
+        leavePDF(); resetDocuments(); errorMessage = nil
+        let entry = destinationHistory.visit(content.sourceURL)
+        pendingEntry = nil; requestedURL = content.sourceURL
+        pdfHistory[entry.id] = content; pdfContent = content
+        configurePDF(content); prunePDFHistory(); update()
+    }
+    private func configurePDF(_ content: PDFTabContent) {
+        let sourceURL = content.isPrivate ? nil : content.sourceURL
+        content.didSave = { [weak services, profileID, tabID] destination in
+            services?.downloads.recordSavedFile(at: destination, sourceURL: sourceURL,
+                                               profileID: profileID, tabID: tabID)
+        }
+        content.view.openLink = { [weak self] url in self?.load(url) }
+        content.changed = { [weak self, weak content] in
+            guard let self, let content else { return }
+            if !content.loading, content.document != nil, self.services?.isPrivate != true {
+                try? self.services?.history.record(content.sourceURL, title: content.filename, profileID: self.profileID)
+            }
+            self.update()
+        }
     }
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {

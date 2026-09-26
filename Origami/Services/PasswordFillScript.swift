@@ -18,7 +18,7 @@ enum PasswordFillScript {
         if (all.some(e => e.autocomplete.toLowerCase().split(/\s+/).includes('new-password'))) return null;
         const passwords = all.filter(e => e.type === 'password');
         if (passwords.length !== 1 || !visible(passwords[0])) return null;
-        const users = all.filter(e => visible(e) && ['text','email'].includes(e.type) &&
+        const users = all.filter(e => !e.autocomplete.toLowerCase().split(/\s+/).includes('one-time-code') && visible(e) && ['text','email'].includes(e.type) &&
           (e.autocomplete.toLowerCase().split(/\s+/).includes('username') ||
            /^(login|username|user|email)$/i.test(e.name) || /^(login|username|email)$/i.test(e.id)));
         if (users.length !== 1 || (input !== users[0] && input !== passwords[0])) return null;

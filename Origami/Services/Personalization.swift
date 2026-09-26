@@ -18,7 +18,7 @@ import Observation
     var defaultAsk: Bool { didSet { defaults.set(defaultAsk, forKey: "newTab.defaultAsk") } }
     var favorites: Bool { didSet { defaults.set(favorites, forKey: prefix + "appearance.favorites") } }
     private(set) var titleImage: Data? { didSet { defaults.set(titleImage, forKey: prefix + "appearance.titleImage") } }
-    var wallpaper: Data? { didSet { defaults.set(wallpaper, forKey: prefix + "appearance.wallpaper"); wallpaperIsDark = Self.isDark(wallpaper) } }
+    var wallpaper: Data? { didSet { wallpaperRevision += 1; defaults.set(wallpaper, forKey: prefix + "appearance.wallpaper"); wallpaperIsDark = Self.isDark(wallpaper) } }
     var wallpaperIsDark = false
     init(defaults: UserDefaults = .standard, prefix: String = "") {
         self.defaults = defaults
@@ -60,6 +60,18 @@ import Observation
         guard revision == titleImageRevision, !Task.isCancelled else { return }
         if titleImage != normalized { titleImage = normalized }
     }
+    @ObservationIgnored private var wallpaperRevision = 0
+    func replaceWallpaper(from url: URL?) async throws {
+        guard let url else { return }
+        wallpaperRevision += 1
+        let revision = wallpaperRevision
+        let result = await Task.detached(priority: .userInitiated) {
+            Result { try WallpaperImageLoader.read(url) }
+        }.value
+        guard revision == wallpaperRevision, !Task.isCancelled else { return }
+        let data = try result.get()
+        if wallpaper != data { wallpaper = data }
+    }
     private static func isDark(_ data: Data?) -> Bool {
         guard let data, let image = NSImage(data: data), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return false }
         var pixels = [UInt8](repeating: 0, count: 32 * 32 * 4)
@@ -99,6 +111,8 @@ struct AppearanceSettings: View {
     @Environment(\.profileAppearance) private var appearance
     private var settings: Personalization { appearance }
     @State private var error: String?
+    @State private var importingTitleImage = false
+    @State private var importingWallpaper = false
     var body: some View {
         @Bindable var settings = appearance
         Section("Appearance") {
@@ -134,12 +148,15 @@ struct AppearanceSettings: View {
             LabeledContent("New Tab title image") {
                 HStack {
                     Button("Choose PNG or SVG…", action: chooseTitleImage).accessibilityIdentifier("chooseTitleImage")
+                        .disabled(importingTitleImage)
+                    if importingTitleImage { ProgressView().controlSize(.small).accessibilityLabel("Loading image…") }
                     if settings.titleImage != nil { Button("Reset") { settings.resetTitleImage() }.accessibilityIdentifier("resetTitleImage") }
                 }
             }.font(.body)
             LabeledContent("Background") {
                 HStack {
-                    Button("Choose Image…", action: chooseWallpaper)
+                    Button("Choose Image…", action: chooseWallpaper).disabled(importingWallpaper)
+                    if importingWallpaper { ProgressView().controlSize(.small).accessibilityLabel("Loading image…") }
                     if settings.wallpaper != nil { Button("Remove") { settings.wallpaper = nil } }
                 }
             }.font(.body)
@@ -155,27 +172,33 @@ struct AppearanceSettings: View {
         // Environment property later from a picker callback after a profile switch.
         let target = settings
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.png, .svg]; panel.allowsMultipleSelection = false
+        // The coordinator handles cloud materialization off the main thread.
+        panel.canDownloadUbiquitousContents = false
         panel.begin { result in
             guard result == .OK, let url = panel.url else { return }
+            importingTitleImage = true; error = nil
             Task { @MainActor in
+                defer { importingTitleImage = false }
                 do { try await target.replaceTitleImage(from: url); error = nil }
                 catch TitleImageLoader.Failure.oversized { error = L10n.string("Choose an image smaller than 4 MB.") }
-                catch { self.error = L10n.string("This PNG or SVG could not be opened.") }
+                catch { self.error = L10n.string("This PNG or SVG could not be opened. For cloud files, check your connection or download the file in Finder and try again. Your current image has not changed.") }
             }
         }
     }
     private func chooseWallpaper() {
+        // Capture the profile before the asynchronous picker outlives this view.
+        let target = settings
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.image]; panel.allowsMultipleSelection = false
+        // The coordinator handles cloud materialization off the main thread.
+        panel.canDownloadUbiquitousContents = false
         panel.begin { result in
             guard result == .OK, let url = panel.url else { return }
-            let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
-            guard let image = NSImage(contentsOf: url), image.size.width > 0, image.size.height > 0 else { error = L10n.string("This image could not be opened."); return }
-            // Store a bounded thumbnail, never an arbitrary original image in preferences.
-            let scale = min(1, 1600 / max(image.size.width, image.size.height))
-            let resized = NSImage(size: NSSize(width: image.size.width*scale, height: image.size.height*scale))
-            resized.lockFocus(); image.draw(in: NSRect(origin: .zero, size: resized.size)); resized.unlockFocus()
-            guard let tiff = resized.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return }
-            settings.wallpaper = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.75]); error = nil
+            importingWallpaper = true; error = nil
+            Task { @MainActor in
+                defer { importingWallpaper = false }
+                do { try await target.replaceWallpaper(from: url); error = nil }
+                catch { self.error = L10n.string("This image could not be opened. For cloud files, check your connection or download the file in Finder and try again. Your current image has not changed.") }
+            }
         }
     }
 }
