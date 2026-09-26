@@ -79,6 +79,25 @@ The only write permission is `contents: write` on release/recovery jobs. Checkou
 
 ## Release procedure and failure recovery
 
+### Xcode Cloud macOS test-host signing
+
+Apple DTS documents a Cloud limitation where macOS test hosts carrying restricted
+entitlements can fail before tests start with RunningBoard error 5 / launchd spawn
+failure: [DTS explanation](https://developer.apple.com/forums/thread/724812).
+
+`ci_pre_xcodebuild.sh` uses Apple's `CI_XCODEBUILD_ACTION` to omit only the browser
+passkey entitlement in the disposable **build-for-testing** checkout. All other
+entitlements remain. It does not change local builds or the repository's committed
+entitlements. **Archive** explicitly checks that the approved passkey entitlement
+is still present and fails if it is missing; it never strips it. The existing
+Cloud Developer ID export/notarization flow is unchanged.
+
+Unit tests therefore do not exercise real passkey authorization on Cloud test VMs.
+Real WebAuthn must still be checked on the exported signed Release app. If the
+test runner still fails to launch, inspect the Cloud result bundle's system logs
+and test-host signature rather than removing additional entitlements. The local
+script tests validate this isolation, not successful launch on a Cloud VM.
+
 ### Passkey Release artifact validation
 
 The temporary vanilla WKWebView A/B harness has been removed. Normal WebAuthn
