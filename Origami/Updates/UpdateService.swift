@@ -83,10 +83,12 @@ struct AboutSettings: View {
             }
             .padding(.vertical, 8)
             HStack(spacing: 12) {
-                Button("About Origami…") { AboutOrigamiWindow.shared.present { [weak store, weak application = store.application] url in
-                    let target = store ?? application?.activeStore ?? application?.newWindow()
-                    target?.newTab(url: url); target?.nativeWindow?.makeKeyAndOrderFront(nil)
-                } }
+                Button("About Origami…") { [weak store] in
+                    AboutOrigamiWindow.shared.present { [weak store, weak application = store?.application] url in
+                        let target = store ?? application?.activeStore ?? application?.newWindow()
+                        target?.newTab(url: url); target?.nativeWindow?.makeKeyAndOrderFront(nil)
+                    }
+                }
                 Button("Feedback & Support") { showingSupport.toggle() }
                     .popover(isPresented: $showingSupport, arrowEdge: .bottom) {
                         FeedbackSupportPopover { url in

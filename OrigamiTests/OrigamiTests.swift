@@ -43,11 +43,12 @@ struct OrigamiTests {
         #expect(try persistence.load() == imported)
     }
 
-    @Test func selectedProfileRestoresItsOwnSession() throws {
+    @Test func defaultProfileRestoresItsOwnSession() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let persistence = SessionStore(fileURL: directory.appending(path: "browser.sqlite"))
         var initial = try persistence.load()
+        initial.tabs = [BrowserTab(url: URL(string: "https://example.com/personal"))]
         initial.normalize()
         try persistence.save(initial)
         let profile = try ProfileRepository(persistence.database).create(name: "Work")
@@ -56,8 +57,13 @@ struct OrigamiTests {
         work.tabs = [BrowserTab(url: URL(string: "https://example.com/work"))]
         work.normalize()
         try persistence.save(work)
-        #expect(try persistence.load().profileID == profile.id)
-        #expect(try persistence.load().tabs.first?.url == work.tabs.first?.url)
+        // Saving a recently active profile must not change the startup default.
+        #expect(try persistence.load().profileID == initial.profileID)
+        #expect(try persistence.load().tabs.first?.url == initial.tabs.first?.url)
+        try ProfileRepository(persistence.database).setDefault(profile.id)
+        let reopened = SessionStore(fileURL: persistence.fileURL)
+        #expect(try reopened.load().profileID == profile.id)
+        #expect(try reopened.load().tabs.first?.url == work.tabs.first?.url)
         #expect(try SessionRepository(persistence.database).load(profileID: initial.profileID)?.windowID == initial.windowID)
     }
 

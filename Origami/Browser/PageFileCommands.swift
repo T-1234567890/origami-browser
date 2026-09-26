@@ -31,7 +31,7 @@ extension BrowserStore {
         let webView = page.webView
         let window = webView.window
         let generation = page.documentGeneration
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
             do {
                 guard let html = try await webView.callAsyncJavaScript(PageHTMLExport.script, arguments: [:], in: nil, contentWorld: .defaultClient) as? String else {
                     throw RepositoryError.invalidInput
@@ -66,7 +66,7 @@ extension BrowserStore {
                     panel.begin(completionHandler: save)
                 }
             } catch {
-                persistenceError = L10n.string("The webpage could not be saved. Please try again.")
+                self?.persistenceError = L10n.string("The webpage could not be saved. Please try again.")
             }
         }
     }
